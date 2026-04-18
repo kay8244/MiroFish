@@ -56,5 +56,14 @@ backend/logs/
 # 上传文件
 backend/uploads/
 
-# Docker 数据
+# Docker 데이터
 data/
+
+# Pipeline orchestrator SQLite (런타임 상태, 커밋 금지)
+backend/pipeline.sqlite3
+backend/pipeline.sqlite3-journal
+backend/pipeline.sqlite3-wal
+backend/pipeline.sqlite3-shm
+
+# OMC / 기타 AI 오케스트레이션 로컬 상태
+.omc/
