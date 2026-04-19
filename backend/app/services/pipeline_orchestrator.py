@@ -659,30 +659,26 @@ class PipelineOrchestrator:
             )
 
     def _purge_zep_group_with_retry(self, zep_group_id: str) -> None:
-        """Zep graph 삭제. 3회 재시도 실패 시 예외.
+        """group_id 범위의 그래프 전부 purge. 3회 재시도 실패 시 예외.
 
-        `zep_group_id`는 오케스트레이터 내부 네이밍이지만 실제로는 Zep graph_id로
-        사용된다 (graph_builder.py + zep_graph_memory_updater.py 와 동일 체계).
-        Zep Cloud SDK(zep_cloud.client.Zep)의 공식 API는 `client.graph.delete(graph_id=...)`.
-        `graph_builder.py:499` 의 delete 호출과 동일 시그니처.
-
-        Graph가 존재하지 않는 경우(404 등)는 이미 purge된 것으로 간주하고 성공 처리.
+        GRAPHITI_MIGRATION_PLAN Phase 1: Neo4j DETACH DELETE로 전환.
+        Zep Cloud `client.graph.delete(graph_id=...)` 경로는 Phase 6에서 제거.
+        그래프가 없었던 경우(0 nodes)는 이미 purge된 것으로 간주하고 성공.
         """
-        from zep_cloud.errors import NotFoundError  # type: ignore
+        from ..utils.graphiti_client import neo4j_driver
+        from ..utils.graph_purge import purge_group
 
         @retry_with_backoff(max_retries=3, initial_delay=2.0, backoff_factor=2.0)
         def _purge():
-            from ..utils.zep_client import create_zep_client
-            client = create_zep_client()
+            driver = neo4j_driver()
             try:
-                client.graph.delete(graph_id=zep_group_id)
-                logger.info(f'Zep graph 삭제 완료: graph_id={zep_group_id}')
-            except NotFoundError:
-                # 해당 graph가 원래부터 없었거나 이전 시도에서 이미 삭제됨 → 성공으로 간주
+                result = purge_group(driver, group_id=zep_group_id)
                 logger.info(
-                    f'Zep graph 존재하지 않음(이미 purge된 것으로 간주): '
-                    f'graph_id={zep_group_id}'
+                    f'graph purge 완료: group_id={zep_group_id}, '
+                    f'nodes_deleted={result["nodes_deleted"]}'
                 )
+            finally:
+                driver.close()
         _purge()
 
     def _write_manifest(self, run_id: str) -> None:

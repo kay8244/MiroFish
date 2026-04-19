@@ -523,7 +523,11 @@ class OntologyGenerator:
 
     def generate_python_code(self, ontology: Dict[str, Any]) -> str:
         """
-        온톨로지 정의를 Python 코드로 변환 (ontology.py 형식)
+        온톨로지 정의를 Python 코드로 변환 (ontology.py 형식).
+
+        GRAPHITI_MIGRATION_PLAN Phase 1 이후: Graphiti 호환 pydantic BaseModel 생성.
+        zep_cloud.external_clients.ontology import 제거. Graphiti는 어떤 pydantic
+        모델도 entity/edge 유형으로 받아들인다.
 
         Args:
             ontology: 온톨로지 정의
@@ -534,11 +538,11 @@ class OntologyGenerator:
         code_lines = [
             '"""',
             '커스텀 엔티티 유형 정의',
-            'MiroFish에 의해 자동 생성됨, 소셜 여론 시뮬레이션에 사용',
+            'MiroFish에 의해 자동 생성됨, 소셜 여론 시뮬레이션에 사용 (Graphiti 호환)',
             '"""',
             '',
-            'from pydantic import Field',
-            'from zep_cloud.external_clients.ontology import EntityModel, EntityText, EdgeModel',
+            'from typing import Optional',
+            'from pydantic import BaseModel, Field',
             '',
             '',
             '# ============== 엔티티 유형 정의 ==============',
@@ -550,7 +554,7 @@ class OntologyGenerator:
             name = entity["name"]
             desc = entity.get("description", f"A {name} entity.")
 
-            code_lines.append(f'class {name}(EntityModel):')
+            code_lines.append(f'class {name}(BaseModel):')
             code_lines.append(f'    """{desc}"""')
 
             attrs = entity.get("attributes", [])
@@ -558,9 +562,9 @@ class OntologyGenerator:
                 for attr in attrs:
                     attr_name = attr["name"]
                     attr_desc = attr.get("description", attr_name)
-                    code_lines.append(f'    {attr_name}: EntityText = Field(')
+                    code_lines.append(f'    {attr_name}: Optional[str] = Field(')
+                    code_lines.append(f'        default=None,')
                     code_lines.append(f'        description="{attr_desc}",')
-                    code_lines.append(f'        default=None')
                     code_lines.append(f'    )')
             else:
                 code_lines.append('    pass')
@@ -578,7 +582,7 @@ class OntologyGenerator:
             class_name = ''.join(word.capitalize() for word in name.split('_'))
             desc = edge.get("description", f"A {name} relationship.")
 
-            code_lines.append(f'class {class_name}(EdgeModel):')
+            code_lines.append(f'class {class_name}(BaseModel):')
             code_lines.append(f'    """{desc}"""')
 
             attrs = edge.get("attributes", [])
@@ -586,9 +590,9 @@ class OntologyGenerator:
                 for attr in attrs:
                     attr_name = attr["name"]
                     attr_desc = attr.get("description", attr_name)
-                    code_lines.append(f'    {attr_name}: EntityText = Field(')
+                    code_lines.append(f'    {attr_name}: Optional[str] = Field(')
+                    code_lines.append(f'        default=None,')
                     code_lines.append(f'        description="{attr_desc}",')
-                    code_lines.append(f'        default=None')
                     code_lines.append(f'    )')
             else:
                 code_lines.append('    pass')
