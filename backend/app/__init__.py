@@ -75,6 +75,11 @@ def create_app(config_class=Config):
     if should_log_startup:
         logger.info("파이프라인 SQLite 스키마 초기화 완료")
 
+    # 파이프라인 step adapter 등록 (모듈 로드 시 side-effect로 register_step 호출)
+    from .services import pipeline_adapters  # noqa: F401
+    if should_log_startup:
+        logger.info("파이프라인 step adapter 등록 완료 (graph/agents/simulation/report)")
+
     # 헬스 체크
     @app.route('/health')
     def health():
