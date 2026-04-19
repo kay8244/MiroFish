@@ -59,6 +59,15 @@ class LLMClient:
         Returns:
             모델 응답 텍스트
         """
+        # Pipeline 오케스트레이터가 현재 실행 중이면 LLM 호출 카운터 증가.
+        # contextvar default=0이므로 오케스트레이터 외부에서 호출돼도 영향 없음.
+        # 역방향 import 회피를 위해 lazy import. 실패 시 조용히 스킵.
+        try:
+            from ..services.pipeline_orchestrator import llm_call_counter
+            llm_call_counter.set(llm_call_counter.get() + 1)
+        except Exception:
+            pass
+
         if self.provider == 'anthropic':
             return self._chat_anthropic(messages, temperature, max_tokens, response_format)
         else:

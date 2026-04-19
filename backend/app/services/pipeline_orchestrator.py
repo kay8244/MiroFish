@@ -286,12 +286,22 @@ class PipelineOrchestrator:
         assumptions_version: str,
         extra_config: Optional[dict] = None,
     ) -> str:
-        """새 run을 생성하고 1~5단계를 순차 실행한다. 한 단계라도 실패하면
-        fail 상태로 종료하며, 이미 완료된 단계는 idempotency로 재호출해도
-        스킵된다. Zep group_id는 'run_<run_id>'로 고정.
+        """새 run을 생성하고 1~5단계를 백그라운드 thread에서 순차 실행한다.
+
+        API 엔드포인트 타임아웃(기본 10초)과 무관하게 run_id를 즉시 반환하기
+        위해 seed 복사 + DB 선등록만 동기로 수행하고, `_run_loop`는 daemon
+        thread에서 실행한다. 호출자는 run_id를 받아 `GET /api/pipeline/status/<id>`
+        로 진행 상황을 폴링한다.
+
+        seed_upload 단계는 start_run 내에서 파일 복사 + DB completed 선등록으로
+        이미 완료된 것으로 간주한다 (어댑터 불필요). `_run_loop`는 idempotency
+        체크로 seed_upload를 스킵하고 graph 단계부터 실행한다.
+
+        한 단계라도 실패하면 run은 failed 상태로 종료되며, resume은 `resume_run`
+        으로 호출한다. Zep group_id(실제 graph_id)는 'run_<run_id>'로 고정.
 
         Returns:
-            run_id (uuid hex)
+            run_id (uuid hex) — 즉시 반환
         """
         run_id = uuid.uuid4().hex
         zep_group_id = f'run_{run_id}'
@@ -312,13 +322,43 @@ class PipelineOrchestrator:
         seed_final.mkdir(parents=True, exist_ok=True)
         _copy_seed_files(seed_files, seed_final)
 
-        self._run_loop(
-            run_id=run_id,
-            zep_group_id=zep_group_id,
-            assumptions_version=assumptions_version,
-            extra_config=extra_config or {},
-            start_from='seed_upload',
+        # MC-5: seed_upload 단계를 완료 상태로 DB에 선등록.
+        # _run_loop의 idempotency 스킵이 작동하려면 완료 레코드가 필요함.
+        # 동기 경로이므로 seed 파일 복사 직후 등록해도 race 없음.
+        seed_completed_at = _now_iso()
+        seed_file_count = sum(1 for _ in seed_final.iterdir() if _.is_file())
+        with _db_conn() as conn:
+            conn.execute(
+                'INSERT OR REPLACE INTO pipeline_steps '
+                '(run_id, step_name, status, idempotency_key, started_at, '
+                'completed_at, duration_s, llm_calls, retry_count, artifact_path) '
+                'VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, ?)',
+                (run_id, 'seed_upload', STEP_STATUS_COMPLETED,
+                 f'{run_id}:seed_upload', now, seed_completed_at,
+                 str(seed_final)),
+            )
+        logger.info(
+            f'{run_id}/seed_upload 완료 선등록 '
+            f'(files={seed_file_count}, dir={seed_final})'
         )
+
+        # MC-4: `_run_loop`를 daemon thread에서 실행하고 run_id를 즉시 반환.
+        # daemon=True로 지정하여 앱 종료 시 thread가 process를 붙잡지 않도록 함.
+        # MVP 단일 빌더 가정 하에서 thread 추적은 불필요 (상태는 DB에 영속화됨).
+        thread = threading.Thread(
+            target=self._run_loop,
+            kwargs={
+                'run_id': run_id,
+                'zep_group_id': zep_group_id,
+                'assumptions_version': assumptions_version,
+                'extra_config': extra_config or {},
+                'start_from': 'seed_upload',
+            },
+            name=f'pipeline-run-{run_id[:8]}',
+            daemon=True,
+        )
+        thread.start()
+        logger.info(f'run 백그라운드 thread 시작: {thread.name}')
         return run_id
 
     def resume_run(self, run_id: str) -> None:
@@ -619,23 +659,29 @@ class PipelineOrchestrator:
             )
 
     def _purge_zep_group_with_retry(self, zep_group_id: str) -> None:
-        """Zep group 삭제. 3회 재시도 실패 시 예외. 실제 Zep 클라이언트
-        호출은 zep_tools 경유 (다음 커밋에서 wiring)."""
+        """Zep graph 삭제. 3회 재시도 실패 시 예외.
+
+        `zep_group_id`는 오케스트레이터 내부 네이밍이지만 실제로는 Zep graph_id로
+        사용된다 (graph_builder.py + zep_graph_memory_updater.py 와 동일 체계).
+        Zep Cloud SDK(zep_cloud.client.Zep)의 공식 API는 `client.graph.delete(graph_id=...)`.
+        `graph_builder.py:499` 의 delete 호출과 동일 시그니처.
+
+        Graph가 존재하지 않는 경우(404 등)는 이미 purge된 것으로 간주하고 성공 처리.
+        """
+        from zep_cloud.errors import NotFoundError  # type: ignore
+
         @retry_with_backoff(max_retries=3, initial_delay=2.0, backoff_factor=2.0)
         def _purge():
-            # 다음 커밋에서 zep_client 연결
-            from ..utils.zep_client import get_zep_client
-            client = get_zep_client()
-            # Zep OSS/Cloud의 graph group 삭제. API 명은 클라이언트 래퍼에 따라 다름.
-            if hasattr(client, 'group') and hasattr(client.group, 'delete'):
-                client.group.delete(zep_group_id)
-            elif hasattr(client, 'delete_group'):
-                client.delete_group(zep_group_id)
-            else:
-                # 클라이언트 래퍼에 삭제 API가 없으면 후속 단계에서 구현
-                logger.warning(
-                    f'Zep group 삭제 API 미구현. group={zep_group_id}. '
-                    'Phase 2에서 wire 필요.'
+            from ..utils.zep_client import create_zep_client
+            client = create_zep_client()
+            try:
+                client.graph.delete(graph_id=zep_group_id)
+                logger.info(f'Zep graph 삭제 완료: graph_id={zep_group_id}')
+            except NotFoundError:
+                # 해당 graph가 원래부터 없었거나 이전 시도에서 이미 삭제됨 → 성공으로 간주
+                logger.info(
+                    f'Zep graph 존재하지 않음(이미 purge된 것으로 간주): '
+                    f'graph_id={zep_group_id}'
                 )
         _purge()
 
