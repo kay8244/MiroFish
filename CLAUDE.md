@@ -36,8 +36,9 @@ cd backend && uv run pytest
 
 Copy `.env.example` to `.env`. Required keys:
 - `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL_NAME` — any OpenAI SDK-compatible LLM API
-- `ZEP_API_KEY` — Zep Cloud for agent memory graphs
+- `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` — Graphiti(Neo4j) 지식 그래프. 로컬 컨테이너는 `docker compose -f graphiti-db/docker-compose.yml up -d`
 - Optional: `LLM_BOOST_*` variants for acceleration
+- Optional (legacy): `ZEP_API_KEY` / `ZEP_BASE_URL` — `uv sync --extra zep`로 Zep Cloud 경로 활성화 시에만 필요. 기본 Graphiti 경로에서는 불필요.
 
 ## Architecture
 
@@ -51,20 +52,22 @@ Entry point: `backend/run.py` → `app.create_app()` (Flask factory pattern)
 - `/api/report` — Report generation via ReportAgent
 
 **Services** (`app/services/`): Core business logic layer
-- `graph_builder.py` — Builds knowledge graphs from seed documents
+- `graph_builder.py` — Graphiti(Neo4j) 기반 지식 그래프 빌더 (Phase 6 canonical)
+- `graph_builder_zep_legacy.py` — 기존 Zep Cloud 빌더 (optional `--extra zep`, 비활성)
 - `ontology_generator.py` — Extracts entity relationships using LLM
-- `oasis_profile_generator.py` — Generates agent personas
+- `oasis_profile_generator.py` — Generates agent personas (legacy Zep enrichment은 soft-import)
 - `simulation_config_generator.py` — Configures simulation parameters
 - `simulation_runner.py` — Runs OASIS simulations in separate processes
 - `simulation_manager.py` — Manages simulation lifecycle
 - `simulation_ipc.py` — Inter-process communication for simulation
 - `report_agent.py` — LLM-powered report generation with tool-use
 - `text_processor.py` — Document chunking and processing
-- `zep_*` — Zep memory integration (entity reading, graph updates, tools)
+- `graphiti_*` — Graphiti memory integration (entity reader, tools, graph memory updater)
 
 **Utils** (`app/utils/`):
 - `llm_client.py` — Unified LLM client (supports OpenAI/Anthropic SDK format)
-- `zep_client.py` — Zep Cloud client wrapper
+- `graphiti_client.py` / `graphiti_paging.py` — Graphiti/Neo4j 클라이언트 팩토리 + Cypher 페이징
+- `zep_client_legacy.py` / `zep_paging_legacy.py` — Zep Cloud 경로 (optional extra)
 - `file_parser.py` — PDF/MD/TXT file parsing
 
 **Config** (`app/config.py`): Loads from `MiroFish/.env` via python-dotenv. Contains OASIS platform action definitions (Twitter/Reddit) and report agent parameters.
@@ -89,11 +92,11 @@ SPA with Vue Router. Vite proxies `/api` requests to Flask backend at `:5001`.
 ### Data Flow
 
 1. User uploads documents → backend parses and chunks text
-2. LLM extracts entities/relationships → Zep stores memory graph
+2. LLM extracts entities/relationships → Graphiti(Neo4j) stores temporal knowledge graph
 3. LLM generates agent profiles from ontology
 4. OASIS runs multi-agent simulation (Twitter/Reddit platforms in parallel)
 5. Simulation results stored in `backend/uploads/simulations/`
-6. ReportAgent analyzes simulation data with tool-use to produce report
+6. ReportAgent analyzes simulation data with Graphiti tool-use to produce report
 7. Users can chat with any simulated agent post-simulation
 
 ### Docker

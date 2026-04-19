@@ -244,15 +244,6 @@ async def _async_noop(*args, **kwargs):
     return None
 
 
-def test_zep_shim_aliases_to_graphiti():
-    from app.services.zep_graph_memory_updater import ZepGraphMemoryUpdater, ZepGraphMemoryManager
-    from app.services.graphiti_graph_memory_updater import (
-        GraphitiGraphMemoryUpdater, GraphitiGraphMemoryManager,
-    )
-    assert ZepGraphMemoryUpdater is GraphitiGraphMemoryUpdater
-    assert ZepGraphMemoryManager is GraphitiGraphMemoryManager
-
-
 # ═══════════════════════════════════════════════════════════════════════
 # Tier B — live Neo4j (MIROFISH_NEO4J=1 게이트)
 # ═══════════════════════════════════════════════════════════════════════

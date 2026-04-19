@@ -292,13 +292,6 @@ def test_get_node_edges_filters_by_uuid(tools_factory):
     assert edges_orphan == []
 
 
-def test_zep_shim_aliases_to_graphiti(tools_factory):
-    """zep_tools shim이 GraphitiToolsService로 redirect됐는지 확인."""
-    from app.services.zep_tools import ZepToolsService
-    from app.services.graphiti_tools import GraphitiToolsService
-    assert ZepToolsService is GraphitiToolsService
-
-
 # ═══════════════════════════════════════════════════════════════════════
 # Tier B — live Neo4j (MIROFISH_NEO4J=1 게이트)
 # ═══════════════════════════════════════════════════════════════════════

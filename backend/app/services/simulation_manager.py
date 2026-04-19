@@ -14,7 +14,7 @@ from enum import Enum
 
 from ..config import Config
 from ..utils.logger import get_logger
-from .zep_entity_reader import ZepEntityReader, FilteredEntities
+from .graphiti_entity_reader import GraphitiEntityReader, FilteredEntities
 from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
 
@@ -294,7 +294,7 @@ class SimulationManager:
             if progress_callback:
                 progress_callback("reading", 0, "Zep 그래프에 연결 중...")
 
-            reader = ZepEntityReader()
+            reader = GraphitiEntityReader()
 
             if progress_callback:
                 progress_callback("reading", 30, "노드 데이터 읽는 중...")

@@ -305,18 +305,6 @@ def build_graph():
     try:
         logger.info("=== 그래프 구성 시작 ===")
 
-        # 설정 확인
-        errors = []
-        if not Config.ZEP_API_KEY:
-            errors.append("ZEP_API_KEY가 설정되지 않았습니다")
-        if errors:
-            logger.error(f"설정 오류: {errors}")
-            logger.debug(traceback.format_exc())
-            return jsonify({
-                "success": False,
-                "error": "설정 오류: " + "; ".join(errors)
-            }), 500
-
         # 요청 파싱
         data = request.get_json() or {}
         project_id = data.get('project_id')
@@ -421,8 +409,8 @@ def build_graph():
                     message="그래프 구성 서비스 초기화 중..."
                 )
 
-                # 그래프 구성 서비스 생성
-                builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
+                # 그래프 구성 서비스 생성 (Graphiti/Neo4j 백엔드)
+                builder = GraphBuilderService()
 
                 # 분할
                 task_manager.update_task(
@@ -606,13 +594,7 @@ def get_graph_data(graph_id: str):
     그래프 데이터 조회 (노드 및 엣지)
     """
     try:
-        if not Config.ZEP_API_KEY:
-            return jsonify({
-                "success": False,
-                "error": "ZEP_API_KEY가 설정되지 않았습니다"
-            }), 500
-
-        builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
+        builder = GraphBuilderService()
         graph_data = builder.get_graph_data(graph_id)
 
         return jsonify({
@@ -633,13 +615,7 @@ def delete_graph(graph_id: str):
     Zep 그래프 삭제
     """
     try:
-        if not Config.ZEP_API_KEY:
-            return jsonify({
-                "success": False,
-                "error": "ZEP_API_KEY가 설정되지 않았습니다"
-            }), 500
-
-        builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
+        builder = GraphBuilderService()
         builder.delete_graph(graph_id)
 
         return jsonify({

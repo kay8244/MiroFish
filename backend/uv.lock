@@ -1301,7 +1301,6 @@ dependencies = [
     { name = "pymupdf" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "zep-cloud" },
 ]
 
 [package.optional-dependencies]
@@ -1309,6 +1308,9 @@ dev = [
     { name = "pipreqs" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+]
+zep = [
+    { name = "zep-cloud" },
 ]
 
 [package.dev-dependencies]
@@ -1335,9 +1337,9 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "zep-cloud", specifier = "==3.13.0" },
+    { name = "zep-cloud", marker = "extra == 'zep'", specifier = "==3.13.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "zep"]
 
 [package.metadata.requires-dev]
 dev = [

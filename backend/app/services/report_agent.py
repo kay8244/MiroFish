@@ -21,8 +21,8 @@ from enum import Enum
 from ..config import Config
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
-from .zep_tools import (
-    ZepToolsService, 
+from .graphiti_tools import (
+    GraphitiToolsService, 
     SearchResult, 
     InsightForgeResult, 
     PanoramaResult,
@@ -891,7 +891,7 @@ class ReportAgent:
         simulation_id: str,
         simulation_requirement: str,
         llm_client: Optional[LLMClient] = None,
-        zep_tools: Optional[ZepToolsService] = None
+        zep_tools: Optional[GraphitiToolsService] = None
     ):
         """
         Report Agent 초기화
@@ -908,7 +908,7 @@ class ReportAgent:
         self.simulation_requirement = simulation_requirement
 
         self.llm = llm_client or LLMClient()
-        self.zep_tools = zep_tools or ZepToolsService()
+        self.zep_tools = zep_tools or GraphitiToolsService()
 
         # 도구 정의
         self.tools = self._define_tools()

@@ -1,5 +1,5 @@
 """
-graph_builder_v2 pydantic 클래스 동적 생성 오프라인 테스트.
+graph_builder pydantic 클래스 동적 생성 오프라인 테스트 (canonical Graphiti 구현).
 
 live Graphiti/Neo4j 왕복은 graphiti_smoke_add_one.py와 smoke_rehearsal_v1.py로 검증.
 """
@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from pydantic import BaseModel  # noqa: E402
 
-from app.services.graph_builder_v2 import (  # noqa: E402
+from app.services.graph_builder import (  # noqa: E402
     _safe_attr_name,
     build_edge_types,
     build_entity_types,
@@ -165,7 +165,7 @@ class TestBuildEdgeTypes:
 
 class TestNoZepImport:
     def test_module_has_no_zep_cloud_dep(self):
-        import app.services.graph_builder_v2 as module
+        import app.services.graph_builder as module
         src = module.__file__
         with open(src, encoding='utf-8') as f:
             text = f.read()

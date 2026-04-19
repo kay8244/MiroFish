@@ -17,9 +17,16 @@ from datetime import datetime
 
 from openai import OpenAI
 from ..config import Config
-from ..utils.zep_client import create_zep_client
 from ..utils.logger import get_logger
-from .zep_entity_reader import EntityNode, ZepEntityReader
+from .graphiti_entity_reader import EntityNode, GraphitiEntityReader
+
+# Legacy Zep Cloud enrichment은 optional extra(`uv sync --extra zep`)로 설치한
+# 경우에만 활성. 평상시(Graphiti 기본 경로)에는 create_zep_client=None이 되고
+# `_search_zep_for_entity`는 no-op로 빈 dict 반환.
+try:
+    from ..utils.zep_client_legacy import create_zep_client  # type: ignore
+except ImportError:  # zep-cloud 미설치 환경(기본) — Graphiti 단독 경로
+    create_zep_client = None  # type: ignore
 
 logger = get_logger('mirofish.oasis_profile')
 
@@ -196,16 +203,17 @@ class OasisProfileGenerator:
             base_url=self.base_url
         )
         
-        # Zep 클라이언트: 풍부한 컨텍스트 검색용
+        # Zep 클라이언트: legacy enrichment 경로 (optional extra 설치 + ZEP_API_KEY
+        # 설정 시에만 활성). Graphiti 기본 경로에서는 zep_client=None → 검색 no-op.
         self.zep_api_key = zep_api_key or Config.ZEP_API_KEY
         self.zep_client = None
         self.graph_id = graph_id
-        
-        if self.zep_api_key:
+
+        if self.zep_api_key and create_zep_client is not None:
             try:
                 self.zep_client = create_zep_client(api_key=self.zep_api_key)
             except Exception as e:
-                logger.warning(f"Zep 클라이언트 초기화 실패: {e}")
+                logger.warning(f"Zep 클라이언트 초기화 실패(legacy enrichment 비활성): {e}")
     
     def generate_profile_from_entity(
         self, 

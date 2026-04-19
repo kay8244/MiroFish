@@ -21,7 +21,7 @@ from queue import Queue
 
 from ..config import Config
 from ..utils.logger import get_logger
-from .zep_graph_memory_updater import ZepGraphMemoryManager
+from .graphiti_graph_memory_updater import GraphitiGraphMemoryManager
 from .simulation_ipc import SimulationIPCClient, CommandType, IPCResponse
 
 logger = get_logger('mirofish.simulation_runner')
@@ -440,7 +440,7 @@ class SimulationRunner:
                 raise ValueError("그래프 메모리 업데이트 활성화 시 graph_id를 제공해야 합니다")
             
             try:
-                ZepGraphMemoryManager.create_updater(simulation_id, graph_id)
+                GraphitiGraphMemoryManager.create_updater(simulation_id, graph_id)
                 cls._graph_memory_enabled[simulation_id] = True
                 logger.info(f"그래프 메모리 업데이트 활성화됨: simulation_id={simulation_id}, graph_id={graph_id}")
             except Exception as e:
@@ -648,7 +648,7 @@ class SimulationRunner:
             # 그래프 메모리 업데이터 중지
             if cls._graph_memory_enabled.get(simulation_id, False):
                 try:
-                    ZepGraphMemoryManager.stop_updater(simulation_id)
+                    GraphitiGraphMemoryManager.stop_updater(simulation_id)
                     logger.info(f"그래프 메모리 업데이트 중지됨: simulation_id={simulation_id}")
                 except Exception as e:
                     logger.error(f"그래프 메모리 업데이터 중지 실패: {e}")
@@ -696,7 +696,7 @@ class SimulationRunner:
         graph_memory_enabled = cls._graph_memory_enabled.get(state.simulation_id, False)
         graph_updater = None
         if graph_memory_enabled:
-            graph_updater = ZepGraphMemoryManager.get_updater(state.simulation_id)
+            graph_updater = GraphitiGraphMemoryManager.get_updater(state.simulation_id)
         
         try:
             with open(log_path, 'r', encoding='utf-8') as f:
@@ -922,7 +922,7 @@ class SimulationRunner:
         # 그래프 메모리 업데이터 중지
         if cls._graph_memory_enabled.get(simulation_id, False):
             try:
-                ZepGraphMemoryManager.stop_updater(simulation_id)
+                GraphitiGraphMemoryManager.stop_updater(simulation_id)
                 logger.info(f"그래프 메모리 업데이트 중지됨: simulation_id={simulation_id}")
             except Exception as e:
                 logger.error(f"그래프 메모리 업데이터 중지 실패: {e}")
@@ -1316,7 +1316,7 @@ class SimulationRunner:
         
         # 먼저 모든 그래프 메모리 업데이터 중지（stop_all 내부에서 로그 출력）
         try:
-            ZepGraphMemoryManager.stop_all()
+            GraphitiGraphMemoryManager.stop_all()
         except Exception as e:
             logger.error(f"그래프 메모리 업데이터 중지 실패: {e}")
         cls._graph_memory_enabled.clear()

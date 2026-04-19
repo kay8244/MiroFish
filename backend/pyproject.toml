@@ -14,9 +14,7 @@ dependencies = [
     "flask-cors>=6.0.0",
     # LLM 相关
     "openai>=1.0.0",
-    # Zep Cloud — Graphiti 마이그레이션 완료 후(Phase 6) 제거 예정
-    "zep-cloud==3.13.0",
-    # Graphiti (Zep OSS 코어) — knowledge graph 백엔드. Phase 0~6 마이그레이션.
+    # Graphiti (Zep OSS 코어) — knowledge graph 백엔드. Phase 0~6 마이그레이션 완료.
     # camel-oasis 0.2.5가 neo4j==5.23.0을 고정하므로 동일 버전 사용. Graphiti는
     # bolt protocol만 쓰므로 5.20+에서 동작.
     "graphiti-core>=0.4.0",
@@ -41,6 +39,12 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pipreqs>=0.5.0",
+]
+# Legacy Zep Cloud 경로 (graph_builder_zep_legacy, zep_client_legacy,
+# zep_paging_legacy, oasis_profile_generator._search_zep_for_entity)를 활성화
+# 하려면 `uv sync --extra zep`로 설치. 기본 Graphiti 경로는 이 extra 없이 동작.
+zep = [
+    "zep-cloud==3.13.0",
 ]
 
 [build-system]

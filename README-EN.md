@@ -122,9 +122,15 @@ LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
 
-# Zep Cloud Configuration
-# Free monthly quota is sufficient for simple usage: https://app.getzep.com/
-ZEP_API_KEY=your_zep_api_key
+# Graphiti (Neo4j) knowledge graph configuration (default backend)
+# Start locally: docker compose -f MiroFish/graphiti-db/docker-compose.yml up -d
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=mirofish-dev
+
+# Zep Cloud (optional / legacy) — not needed for the default Graphiti path.
+# To switch back: `uv sync --extra zep` and set the key below.
+# ZEP_API_KEY=your_zep_api_key
 ```
 
 #### 2. Install Dependencies

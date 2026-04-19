@@ -20,7 +20,7 @@ from datetime import datetime
 from ..config import Config
 from ..utils.logger import get_logger
 from ..utils.llm_client import LLMClient
-from .zep_entity_reader import EntityNode, ZepEntityReader
+from .graphiti_entity_reader import EntityNode, GraphitiEntityReader
 
 logger = get_logger('mirofish.simulation_config')
 

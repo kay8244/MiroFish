@@ -9,7 +9,7 @@ from flask import request, jsonify, send_file
 
 from . import simulation_bp
 from ..config import Config
-from ..services.zep_entity_reader import ZepEntityReader
+from ..services.graphiti_entity_reader import GraphitiEntityReader
 from ..services.oasis_profile_generator import OasisProfileGenerator
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import SimulationRunner, RunnerStatus, SimulationLimitError
@@ -82,12 +82,6 @@ def get_graph_entities(graph_id: str):
                 "error": "graph_id 를 제공해주세요"
             }), 400
 
-        if not Config.ZEP_API_KEY:
-            return jsonify({
-                "success": False,
-                "error": "ZEP_API_KEY가 설정되지 않았습니다"
-            }), 500
-
         entity_types_str = request.args.get('entity_types', '')
         entity_types = [t.strip() for t in entity_types_str.split(',') if t.strip()] if entity_types_str else None
         enrich = request.args.get('enrich', 'true').lower() == 'true'
@@ -101,7 +95,7 @@ def get_graph_entities(graph_id: str):
 
         logger.info(f"그래프 엔티티 가져오기: graph_id={graph_id}, entity_types={entity_types}, enrich={enrich}")
 
-        reader = ZepEntityReader()
+        reader = GraphitiEntityReader()
         result = reader.filter_defined_entities(
             graph_id=graph_id,
             defined_entity_types=entity_types,
@@ -128,13 +122,7 @@ def get_graph_entities(graph_id: str):
 def get_entity_detail(graph_id: str, entity_uuid: str):
     """단일 엔티티 상세 정보 가져오기"""
     try:
-        if not Config.ZEP_API_KEY:
-            return jsonify({
-                "success": False,
-                "error": "ZEP_API_KEY가 설정되지 않았습니다"
-            }), 500
-
-        reader = ZepEntityReader()
+        reader = GraphitiEntityReader()
         entity = reader.get_entity_with_context(graph_id, entity_uuid)
 
         if not entity:
@@ -161,15 +149,9 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
 def get_entities_by_type(graph_id: str, entity_type: str):
     """지정된 유형의 모든 엔티티 가져오기"""
     try:
-        if not Config.ZEP_API_KEY:
-            return jsonify({
-                "success": False,
-                "error": "ZEP_API_KEY가 설정되지 않았습니다"
-            }), 500
-
         enrich = request.args.get('enrich', 'true').lower() == 'true'
 
-        reader = ZepEntityReader()
+        reader = GraphitiEntityReader()
         entities = reader.get_entities_by_type(
             graph_id=graph_id,
             entity_type=entity_type,
@@ -508,7 +490,7 @@ def prepare_simulation():
         # 이를 통해 프론트엔드가 prepare 호출 직후 예상 Agent 총 수를 바로 가져올 수 있음
         try:
             logger.info(f"동기적 엔티티 수 조회: graph_id={state.graph_id}")
-            reader = ZepEntityReader()
+            reader = GraphitiEntityReader()
             # 빠른 엔티티 읽기 (엣지 정보 불필요, 수만 집계)
             filtered_preview = reader.filter_defined_entities(
                 graph_id=state.graph_id,
@@ -1446,7 +1428,7 @@ def generate_profiles():
         use_llm = data.get('use_llm', True)
         platform = data.get('platform', 'reddit')
 
-        reader = ZepEntityReader()
+        reader = GraphitiEntityReader()
         filtered = reader.filter_defined_entities(
             graph_id=graph_id,
             defined_entity_types=entity_types,

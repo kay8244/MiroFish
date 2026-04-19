@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 # Zep 경로 강제 비활성 (Phase 2 stash 검증은 Graphiti만)
 os.environ.pop("ZEP_API_KEY", None)
 
-from app.services.zep_entity_reader import ZepEntityReader  # shim
+from app.services.graphiti_entity_reader import GraphitiEntityReader
 from app.services.oasis_profile_generator import OasisProfileGenerator
 
 
@@ -25,7 +25,7 @@ N = int(os.environ.get("PROFILE_N", "3"))
 
 def main():
     print(f"=== Phase 3 profile smoke (N={N}) ===")
-    reader = ZepEntityReader()
+    reader = GraphitiEntityReader()
     try:
         filtered = reader.filter_defined_entities(GROUP_ID, enrich_with_edges=True)
     finally:
