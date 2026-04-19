@@ -1,0 +1,277 @@
+# MiroFish AI Server / SI Wafer 도메인 온톨로지 스캐폴드 (v1)
+#
+# 현재 LLM이 seed 문서에서 자동 생성하는 ontology와 1:1 대응되는 reference.
+# 이 파일은 수동 튜닝 시 출발점 + 리허설 결과 비교용 anchor 로 사용.
+# 프로그래매틱 주입이 필요해지면 graph_adapter에 ontology_file 슬롯 추가 후
+# OntologyGenerator 스킵 분기 태우면 된다 (Day 3 이후 고려).
+#
+# 명명 규칙 — Zep API 호환:
+#   - entity_types.name: PascalCase (NGO 같은 짧은 약어만 예외)
+#   - edge_types.name: UPPER_SNAKE_CASE
+#   - attribute name: snake_case. `name`/`uuid`/`group_id`/`created_at`/`summary`는 예약어.
+#
+# 10개 entity (구체 8 + 폴백 Person/Organization 2) + 10개 edge.
+
+version: ai_server_si_wafer_v1
+domain: ai_server_silicon_wafer_ecosystem
+analysis_summary: |
+  AI 서버 수요 및 SI 웨이퍼 공급망 (2025-2026) 시뮬레이션용 온톨로지.
+  하이퍼스케일러 CAPEX → NVIDIA/AMD GPU → TSMC 파운드리 → ABF/MLB/CCL 기판 →
+  HBM/DDR5 메모리 → SI 웨이퍼 제조사로 흐르는 가치 사슬과, 이를 관찰/논평하는
+  애널리스트·미디어·규제 기관의 여론 전파를 모형화.
+
+entity_types:
+  # ═══ 구체 유형 (8개) ═══
+  - name: HyperScaler
+    description: >-
+      Cloud hyperscaler operating AI/DC capex cycles (Microsoft, Amazon, Google,
+      Meta, Oracle). Drives GPU and data center infra demand.
+    attributes:
+      - name: company_name
+        type: text
+        description: Official company name
+      - name: ticker
+        type: text
+        description: Stock ticker symbol
+      - name: annual_capex_usd_b
+        type: text
+        description: Annual capex guidance in USD billions
+    examples: [Microsoft, Amazon, Google, Meta, Oracle]
+
+  - name: FablessCompany
+    description: >-
+      GPU/ASIC/chip designer relying on foundries (NVIDIA, AMD, Broadcom,
+      Marvell). Drives advanced node + CoWoS demand.
+    attributes:
+      - name: company_name
+        type: text
+        description: Official company name
+      - name: primary_product
+        type: text
+        description: Primary product line (e.g., H200, B200)
+      - name: foundry_partner
+        type: text
+        description: Primary foundry partner
+    examples: [NVIDIA, AMD, Broadcom, Marvell]
+
+  - name: Foundry
+    description: >-
+      Semiconductor foundry providing advanced process + advanced packaging
+      (TSMC, Samsung Foundry, Intel Foundry).
+    attributes:
+      - name: company_name
+        type: text
+        description: Official company name
+      - name: process_nodes
+        type: text
+        description: Active process nodes
+      - name: advanced_packaging_capacity
+        type: text
+        description: CoWoS/FOWLP monthly capacity
+    examples: [TSMC, Samsung Foundry, Intel Foundry]
+
+  - name: ServerODM
+    description: >-
+      Taiwan-based server ODM shipping AI servers to hyperscalers
+      (Wistron, Wiwynn, Quanta, Inventec, Foxconn).
+    attributes:
+      - name: company_name
+        type: text
+        description: Official company name
+      - name: monthly_revenue_ntd_m
+        type: text
+        description: Latest reported monthly revenue (NTD millions)
+      - name: primary_customer
+        type: text
+        description: Primary hyperscaler customer
+    examples: [Wistron, Wiwynn, Quanta, Inventec, Foxconn]
+
+  - name: MemoryMaker
+    description: >-
+      DRAM/HBM/NAND producer qualifying for AI server BOM
+      (SK Hynix, Samsung, Micron).
+    attributes:
+      - name: company_name
+        type: text
+        description: Official company name
+      - name: hbm_generation
+        type: text
+        description: Current HBM product in mass production
+      - name: nvidia_qualification
+        type: text
+        description: NVIDIA qualification status
+    examples: [SK Hynix, Samsung Electronics, Micron]
+
+  - name: WaferManufacturer
+    description: >-
+      300mm silicon wafer manufacturer feeding foundries and memory makers
+      (Shin-Etsu, SUMCO, GlobalWafers, SK Siltron).
+    attributes:
+      - name: company_name
+        type: text
+        description: Official company name
+      - name: monthly_capacity_wafers
+        type: text
+        description: 300mm monthly capacity
+      - name: ai_exposure_ratio
+        type: text
+        description: Portion of output tied to AI/HPC demand
+    examples: [Shin-Etsu, SUMCO, GlobalWafers, SK Siltron]
+
+  - name: Analyst
+    description: >-
+      Sell-side or buy-side analyst tracking AI server / semiconductor
+      ecosystem (JPMorgan, Goldman, Citi, domestic KR brokers).
+    attributes:
+      - name: full_name
+        type: text
+        description: Analyst full name
+      - name: affiliation
+        type: text
+        description: Employer (broker / fund / research house)
+      - name: coverage_scope
+        type: text
+        description: Coverage universe (e.g., semiconductor, PCB)
+    examples: [Gokul Hariharan, Simon Coles, Kim Dong-won]
+
+  - name: MediaOutlet
+    description: >-
+      Industry press or wire service covering AI infra + semis
+      (DIGITIMES, TrendForce, Reuters, Bloomberg, 전자신문).
+    attributes:
+      - name: outlet_name
+        type: text
+        description: Publication name
+      - name: region
+        type: text
+        description: Primary coverage region
+      - name: subscription_tier
+        type: text
+        description: Free / paid tier
+    examples: [DIGITIMES, TrendForce, Reuters, 전자신문, 경제일보]
+
+  # ═══ 폴백 유형 (2개, 목록의 마지막) ═══
+  - name: Person
+    description: >-
+      Any individual person not fitting other specific person types — retail
+      investor, engineer, ordinary netizen, commentator.
+    attributes:
+      - name: full_name
+        type: text
+        description: Full name
+      - name: role
+        type: text
+        description: Role or occupation
+    examples: [retail investor, industry engineer, anonymous netizen]
+
+  - name: Organization
+    description: >-
+      Any organization not fitting other specific org types — trade
+      association, research institute, regulator, NGO.
+    attributes:
+      - name: org_name
+        type: text
+        description: Organization name
+      - name: org_type
+        type: text
+        description: Type (association / regulator / institute)
+    examples: [SEMI, TSIA, US DoC BIS, 한국반도체산업협회]
+
+# Edge types: 10개 — 밸류체인 흐름 + 여론 전파 모두 커버
+edge_types:
+  - name: INVESTS_IN
+    description: Capex flow from hyperscaler to server/chip suppliers.
+    source_targets:
+      - { source: HyperScaler, target: FablessCompany }
+      - { source: HyperScaler, target: ServerODM }
+      - { source: HyperScaler, target: MemoryMaker }
+    attributes:
+      - name: deal_size
+        type: text
+        description: Announced or estimated deal size
+      - name: deal_date
+        type: text
+        description: Deal / contract date
+
+  - name: SUPPLIES_TO
+    description: Physical goods supply relationship along the value chain.
+    source_targets:
+      - { source: WaferManufacturer, target: Foundry }
+      - { source: WaferManufacturer, target: MemoryMaker }
+      - { source: Foundry, target: FablessCompany }
+      - { source: MemoryMaker, target: FablessCompany }
+      - { source: ServerODM, target: HyperScaler }
+      - { source: FablessCompany, target: ServerODM }
+
+  - name: COMPETES_WITH
+    description: Direct market competitor in the same segment.
+    source_targets:
+      - { source: HyperScaler, target: HyperScaler }
+      - { source: FablessCompany, target: FablessCompany }
+      - { source: MemoryMaker, target: MemoryMaker }
+      - { source: ServerODM, target: ServerODM }
+      - { source: WaferManufacturer, target: WaferManufacturer }
+
+  - name: COLLABORATES_WITH
+    description: Joint roadmap, qualification, or co-development partnership.
+    source_targets:
+      - { source: FablessCompany, target: Foundry }
+      - { source: FablessCompany, target: MemoryMaker }
+      - { source: HyperScaler, target: FablessCompany }
+
+  - name: REGULATES
+    description: Regulatory oversight or sanction (export controls, antitrust).
+    source_targets:
+      - { source: Organization, target: FablessCompany }
+      - { source: Organization, target: Foundry }
+      - { source: Organization, target: HyperScaler }
+
+  - name: REPORTS_ON
+    description: Media coverage of an ecosystem player or event.
+    source_targets:
+      - { source: MediaOutlet, target: HyperScaler }
+      - { source: MediaOutlet, target: FablessCompany }
+      - { source: MediaOutlet, target: Foundry }
+      - { source: MediaOutlet, target: MemoryMaker }
+      - { source: MediaOutlet, target: ServerODM }
+      - { source: MediaOutlet, target: WaferManufacturer }
+
+  - name: COMMENTS_ON
+    description: Analyst or commentator opinion on a company or trend.
+    source_targets:
+      - { source: Analyst, target: HyperScaler }
+      - { source: Analyst, target: FablessCompany }
+      - { source: Analyst, target: Foundry }
+      - { source: Analyst, target: MemoryMaker }
+      - { source: Analyst, target: ServerODM }
+      - { source: Person, target: HyperScaler }
+
+  - name: RESPONDS_TO
+    description: Direct reply / rebuttal / response to another actor's public statement.
+    source_targets:
+      - { source: HyperScaler, target: Analyst }
+      - { source: FablessCompany, target: Analyst }
+      - { source: MemoryMaker, target: Analyst }
+      - { source: HyperScaler, target: MediaOutlet }
+
+  - name: AFFILIATED_WITH
+    description: Employment / membership / subsidiary relationship.
+    source_targets:
+      - { source: Analyst, target: Organization }
+      - { source: MediaOutlet, target: Organization }
+      - { source: Person, target: Organization }
+
+  - name: FORECASTS
+    description: Explicit forward-looking guidance or target.
+    source_targets:
+      - { source: HyperScaler, target: HyperScaler }
+      - { source: FablessCompany, target: FablessCompany }
+      - { source: Analyst, target: MemoryMaker }
+      - { source: MediaOutlet, target: WaferManufacturer }
+    attributes:
+      - name: horizon
+        type: text
+        description: Forecast horizon (Q1 2026, FY2026, etc.)
+      - name: direction
+        type: text
+        description: Positive / negative / neutral
