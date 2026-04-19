@@ -193,7 +193,7 @@ import {
   resumePipelineRun,
   PIPELINE_STEP_LABELS,
   PIPELINE_STEP_NAMES
-} from '@/api/pipeline'
+} from '../api/pipeline'
 
 const fileInputRef = ref(null)
 const selectedFiles = ref([])
