@@ -22,6 +22,7 @@ Graphiti 전환 핵심:
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 import traceback
 import uuid
@@ -227,12 +228,28 @@ class GraphBuilderService:
         try:
             await graphiti.build_indices_and_constraints()
 
-            # 4) 병렬 add_episode (asyncio.gather, SEMAPHORE_LIMIT은 Graphiti가 제어)
+            # 4) 병렬 add_episode — outer semaphore로 동시 chunk 수 제한.
+            #    Graphiti 내부 SEMAPHORE_LIMIT만으로는 부족 (각 add_episode가
+            #    여러 nested LLM 호출을 가짐 → chunk 9개 × nested concurrent =
+            #    조직 TPM 한도 200k 즉시 돌파). outer 제한으로 burst 평탄화.
+            #    기본 2, GRAPH_BUILDER_MAX_CONCURRENT 환경변수로 조정 가능.
+            max_concurrent = int(os.environ.get('GRAPH_BUILDER_MAX_CONCURRENT', '2'))
+            # chunk 간 인위적 지연 — OpenAI 조직 TPM 한도(우리 환경 Tier 1 기준
+            # 200k/min)가 9 chunks × ~35k tokens 동시 처리에 부족할 때 사용.
+            # Tier 2+ 환경에서는 0으로 두면 최대 throughput.
+            chunk_delay_s = float(os.environ.get('GRAPH_BUILDER_CHUNK_DELAY_S', '0'))
+            outer_semaphore = asyncio.Semaphore(max_concurrent)
             reference_time = datetime.now(timezone.utc)
             completed = {'count': 0}
             lock = asyncio.Lock()
 
             async def add_one(idx: int, chunk: str) -> None:
+                async with outer_semaphore:
+                    await _add_one_unlocked(idx, chunk)
+                    if chunk_delay_s > 0:
+                        await asyncio.sleep(chunk_delay_s)
+
+            async def _add_one_unlocked(idx: int, chunk: str) -> None:
                 try:
                     # EpisodeType import는 버전 따라 위치가 달라 graceful fallback
                     source = None
