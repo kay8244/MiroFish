@@ -76,6 +76,20 @@ def start_run():
 
     assumptions_version = request.form.get('assumptions_version', 'ai_server_si_wafer_v1')
 
+    # extra_config: 어댑터 동작 튜닝(예: simulation_max_rounds, enable_twitter/reddit,
+    # parallel_profile_count). 폼 필드에 JSON 문자열로 전달하면 그대로 어댑터 ctx.config로 들어간다.
+    import json as _json
+    extra_config_raw = request.form.get('extra_config', '{}')
+    try:
+        extra_config = _json.loads(extra_config_raw)
+        if not isinstance(extra_config, dict):
+            raise ValueError('extra_config must be a JSON object')
+    except (ValueError, _json.JSONDecodeError) as e:
+        return jsonify({
+            'error': 'invalid_extra_config',
+            'message': f'extra_config 폼 필드는 JSON object여야 합니다: {e}',
+        }), 400
+
     # 일시 업로드 저장 (seed_upload 단계 입력으로 전달)
     staging_dir = _uploads_root() / 'staging'
     staging_dir.mkdir(parents=True, exist_ok=True)
@@ -120,6 +134,7 @@ def start_run():
             rid = _orchestrator.start_run(
                 seed_files=saved_paths,
                 assumptions_version=assumptions_version,
+                extra_config=extra_config,
             )
             run_id_holder['id'] = rid
         except Exception as e:
