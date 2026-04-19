@@ -28,7 +28,8 @@ from typing import Any
 from .pipeline_orchestrator import StepContext, register_step
 from .text_processor import TextProcessor
 from .ontology_generator import OntologyGenerator
-from .graph_builder import GraphBuilderService
+# Phase 2: Graphiti(Neo4j) 기반 빌더로 전환. 구 Zep graph_builder는 Phase 6에서 삭제.
+from .graph_builder_v2 import GraphBuilderServiceV2 as GraphBuilderService
 from .simulation_manager import SimulationManager
 from .simulation_runner import SimulationRunner, RunnerStatus
 from .report_agent import ReportAgent
