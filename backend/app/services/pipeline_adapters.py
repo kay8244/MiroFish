@@ -58,6 +58,7 @@ def graph_adapter(ctx: StepContext) -> dict:
     NOTE: graph_id는 graph_builder가 자체 생성 (`mirofish_<uuid16>`).
     ctx.zep_group_id는 manifest의 논리 식별자일 뿐, 실제 Zep graph_id와 다르다.
     """
+    ctx.tmp_dir.mkdir(parents=True, exist_ok=True)
     seed_files = sorted(p for p in ctx.seed_dir.iterdir() if p.is_file())
     if not seed_files:
         raise RuntimeError(f'graph: seed_dir에 파일 없음: {ctx.seed_dir}')
@@ -157,6 +158,7 @@ def agents_adapter(ctx: StepContext) -> dict:
     실제 OASIS profile 생성은 simulation 단계의 prepare_simulation 내부에서
     일괄 처리되므로 여기서는 별도 LLM 호출 없음.
     """
+    ctx.tmp_dir.mkdir(parents=True, exist_ok=True)
     if ctx.prev_step_dir is None:
         raise RuntimeError('agents: prev_step_dir 없음 (graph 단계 산출 필요)')
 
@@ -200,6 +202,7 @@ def simulation_adapter(ctx: StepContext) -> dict:
     assumptions YAML은 simulation_requirement 문자열에 텍스트로 임베드된다
     (계약 차이 #3 — config_generator에 별도 슬롯 없음).
     """
+    ctx.tmp_dir.mkdir(parents=True, exist_ok=True)
     if ctx.prev_step_dir is None:
         raise RuntimeError('simulation: prev_step_dir 없음 (agents 단계 산출 필요)')
 
@@ -323,6 +326,7 @@ def report_adapter(ctx: StepContext) -> dict:
     pipeline tmp_dir에는 메타와 report_id만 기록. 실제 산출물 경로는
     SimulationRunner와 동일하게 서비스 관리 디렉토리에 유지된다.
     """
+    ctx.tmp_dir.mkdir(parents=True, exist_ok=True)
     if ctx.prev_step_dir is None:
         raise RuntimeError('report: prev_step_dir 없음 (simulation 단계 산출 필요)')
 
