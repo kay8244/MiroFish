@@ -52,12 +52,20 @@ def main():
 
     # ── extra_config ────────────────────────────────────────────
     max_rounds = int(os.environ.get('SMOKE_MAX_ROUNDS', '20'))
+    # Zep 125-청크 타임아웃 교훈: chunk_size 500 기본이면 57KB seed → 125 chunks →
+    # 10분 안에 Zep 처리 불가. chunk_size 2000으로 키워서 chunk 수 ~32개로 축소.
+    chunk_size = int(os.environ.get('SMOKE_CHUNK_SIZE', '2000'))
+    chunk_overlap = int(os.environ.get('SMOKE_CHUNK_OVERLAP', '200'))
+    zep_batch_size = int(os.environ.get('SMOKE_ZEP_BATCH_SIZE', '8'))
     extra_config = {
         'assumptions_text': assumptions_text,
         'simulation_max_rounds': max_rounds,
         'enable_twitter': True,
         'enable_reddit': True,
         'parallel_profile_count': 3,
+        'chunk_size': chunk_size,
+        'chunk_overlap': chunk_overlap,
+        'zep_batch_size': zep_batch_size,
         'simulation_requirement': (
             'AI 서버 수요 사이클 및 SI 웨이퍼 공급망의 2026년 2분기 여론 전파 '
             '시뮬레이션. 하이퍼스케일러 capex 사이클, HBM 병목, TSMC CoWoS 증설, '
@@ -65,6 +73,7 @@ def main():
         ),
     }
     print(f'■ max_rounds={max_rounds}, twitter=T, reddit=T')
+    print(f'■ chunk_size={chunk_size}, chunk_overlap={chunk_overlap}, zep_batch_size={zep_batch_size}')
 
     # ── run ─────────────────────────────────────────────────────
     orch = PipelineOrchestrator()
