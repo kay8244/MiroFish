@@ -5,6 +5,7 @@
 
 import os
 import mimetypes
+import time
 import traceback
 import threading
 from flask import request, jsonify
@@ -388,152 +389,56 @@ def build_graph():
                 "error": "온톨로지 정의를 찾을 수 없습니다"
             }), 400
 
-        # 비동기 작업 생성
+        # Graphiti 백엔드는 build_graph_async가 내부에서 분할/온톨로지/episode/대기/조회를
+        # 한 번에 수행. 프로젝트 graph_id는 task 결과에서 추출하므로 background thread로
+        # task 상태를 polling하여 ProjectManager에 반영.
         task_manager = TaskManager()
-        task_id = task_manager.create_task(f"그래프 구성: {graph_name}")
-        logger.info(f"그래프 구성 작업 생성: task_id={task_id}, project_id={project_id}")
+        builder = GraphBuilderService()
+        task_id = builder.build_graph_async(
+            text=text,
+            ontology=ontology,
+            graph_name=graph_name,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+        logger.info(f"그래프 구성 작업 시작: task_id={task_id}, project_id={project_id}")
 
         # 프로젝트 상태 업데이트
         project.status = ProjectStatus.GRAPH_BUILDING
         project.graph_build_task_id = task_id
         ProjectManager.save_project(project)
 
-        # 백그라운드 작업 시작
-        def build_task():
+        # 완료/실패 시 ProjectManager 업데이트하는 watcher.
+        # task_manager.get_task는 Task dataclass를 반환하므로 attribute 접근 사용.
+        def project_watcher():
             build_logger = get_logger('mirofish.build')
-            try:
-                build_logger.info(f"[{task_id}] 그래프 구성 시작...")
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.PROCESSING,
-                    message="그래프 구성 서비스 초기화 중..."
-                )
-
-                # 그래프 구성 서비스 생성 (Graphiti/Neo4j 백엔드)
-                builder = GraphBuilderService()
-
-                # 분할
-                task_manager.update_task(
-                    task_id,
-                    message="텍스트 분할 중...",
-                    progress=5
-                )
-                chunks = TextProcessor.split_text(
-                    text,
-                    chunk_size=chunk_size,
-                    overlap=chunk_overlap
-                )
-                total_chunks = len(chunks)
-
-                # 그래프 생성
-                task_manager.update_task(
-                    task_id,
-                    message="Zep 그래프 생성 중...",
-                    progress=10
-                )
-                graph_id = builder.create_graph(name=graph_name)
-
-                # 프로젝트의 graph_id 업데이트
-                project.graph_id = graph_id
-                ProjectManager.save_project(project)
-
-                # 온톨로지 설정
-                task_manager.update_task(
-                    task_id,
-                    message="온톨로지 정의 설정 중...",
-                    progress=15
-                )
-                builder.set_ontology(graph_id, ontology)
-
-                # 텍스트 추가 (progress_callback 시그니처는 (msg, progress_ratio))
-                def add_progress_callback(msg, progress_ratio):
-                    progress = 15 + int(progress_ratio * 40)  # 15% - 55%
-                    task_manager.update_task(
-                        task_id,
-                        message=msg,
-                        progress=progress
+            while True:
+                time.sleep(1)
+                t = task_manager.get_task(task_id)
+                if t is None:
+                    build_logger.warning(f"[{task_id}] task lookup miss")
+                    return
+                if t.status == TaskStatus.COMPLETED:
+                    result = t.result or {}
+                    graph_id = result.get('graph_id')
+                    project.graph_id = graph_id
+                    project.status = ProjectStatus.GRAPH_COMPLETED
+                    ProjectManager.save_project(project)
+                    info = result.get('graph_info') or {}
+                    build_logger.info(
+                        f"[{task_id}] 그래프 구성 완료: graph_id={graph_id} "
+                        f"노드={info.get('node_count')} 엣지={info.get('edge_count')}"
                     )
+                    return
+                if t.status == TaskStatus.FAILED:
+                    err = t.error or t.message or 'unknown'
+                    project.status = ProjectStatus.FAILED
+                    project.error = str(err)
+                    ProjectManager.save_project(project)
+                    build_logger.error(f"[{task_id}] 그래프 구성 실패: {err}")
+                    return
 
-                task_manager.update_task(
-                    task_id,
-                    message=f"{total_chunks}개 텍스트 청크 추가 시작...",
-                    progress=15
-                )
-
-                episode_uuids = builder.add_text_batches(
-                    graph_id,
-                    chunks,
-                    batch_size=3,
-                    progress_callback=add_progress_callback
-                )
-
-                # Zep 처리 완료 대기 (각 episode의 processed 상태 조회)
-                task_manager.update_task(
-                    task_id,
-                    message="Zep 데이터 처리 대기 중...",
-                    progress=55
-                )
-
-                def wait_progress_callback(msg, progress_ratio):
-                    progress = 55 + int(progress_ratio * 35)  # 55% - 90%
-                    task_manager.update_task(
-                        task_id,
-                        message=msg,
-                        progress=progress
-                    )
-
-                builder._wait_for_episodes(episode_uuids, wait_progress_callback)
-
-                # 그래프 데이터 가져오기
-                task_manager.update_task(
-                    task_id,
-                    message="그래프 데이터 가져오는 중...",
-                    progress=95
-                )
-                graph_data = builder.get_graph_data(graph_id)
-
-                # 프로젝트 상태 업데이트
-                project.status = ProjectStatus.GRAPH_COMPLETED
-                ProjectManager.save_project(project)
-
-                node_count = graph_data.get("node_count", 0)
-                edge_count = graph_data.get("edge_count", 0)
-                build_logger.info(f"[{task_id}] 그래프 구성 완료: graph_id={graph_id}, 노드={node_count}, 엣지={edge_count}")
-
-                # 완료
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.COMPLETED,
-                    message="그래프 구성 완료",
-                    progress=100,
-                    result={
-                        "project_id": project_id,
-                        "graph_id": graph_id,
-                        "node_count": node_count,
-                        "edge_count": edge_count,
-                        "chunk_count": total_chunks
-                    }
-                )
-
-            except Exception as e:
-                # 프로젝트 상태를 실패로 업데이트
-                build_logger.error(f"[{task_id}] 그래프 구성 실패: {str(e)}")
-                build_logger.debug(traceback.format_exc())
-
-                project.status = ProjectStatus.FAILED
-                project.error = str(e)
-                ProjectManager.save_project(project)
-
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.FAILED,
-                    message=f"구성 실패: {str(e)}",
-                    error=str(e)
-                )
-
-        # 백그라운드 스레드 시작
-        thread = threading.Thread(target=build_task, daemon=True)
-        thread.start()
+        threading.Thread(target=project_watcher, daemon=True).start()
 
         return jsonify({
             "success": True,

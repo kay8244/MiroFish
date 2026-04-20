@@ -355,14 +355,29 @@ class GraphBuilderService:
         finally:
             driver.close()
 
+        # neo4j.time.DateTime → ISO string. flask jsonify 직렬화 가능하게.
+        # 거대한 name_embedding (~1500 float)도 frontend엔 불필요하므로 제거.
+        _STRIP_ATTR_KEYS = {'name_embedding', 'fact_embedding'}
+
+        def _serialize(v):
+            if v is None or isinstance(v, (str, int, float, bool)):
+                return v
+            if hasattr(v, 'isoformat'):
+                return v.isoformat()
+            if isinstance(v, dict):
+                return {k: _serialize(val) for k, val in v.items() if k not in _STRIP_ATTR_KEYS}
+            if isinstance(v, (list, tuple)):
+                return [_serialize(x) for x in v]
+            return str(v)
+
         nodes = [
             {
                 'uuid': n.get('uuid'),
                 'name': n.get('name'),
                 'labels': [lbl for lbl in (n.get('labels') or []) if lbl != 'Entity'],
                 'summary': n.get('summary'),
-                'attributes': n.get('attributes') or {},
-                'created_at': n.get('created_at'),
+                'attributes': _serialize(n.get('attributes') or {}),
+                'created_at': _serialize(n.get('created_at')),
             }
             for n in raw_nodes
         ]
@@ -373,7 +388,7 @@ class GraphBuilderService:
                 'fact': e.get('fact'),
                 'source_node_uuid': e.get('source_node_uuid'),
                 'target_node_uuid': e.get('target_node_uuid'),
-                'created_at': e.get('created_at'),
+                'created_at': _serialize(e.get('created_at')),
             }
             for e in raw_edges
         ]
