@@ -40,8 +40,29 @@ def create_app(config_class=Config):
         logger.info("=" * 50)
 
     # CORS 활성화 — whitelist (개발: localhost:3000, 배포: CORS_ORIGINS env로 override)
+    # 세션 쿠키 전송을 위해 supports_credentials=True (프론트에서 withCredentials 필요)
     cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
-    CORS(app, resources={r"/api/*": {"origins": [o.strip() for o in cors_origins]}})
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": [o.strip() for o in cors_origins]}},
+        supports_credentials=True,
+    )
+
+    # 세션 쿠키 설정 (Flask-Login 기반 인증)
+    app.config.setdefault('SESSION_COOKIE_HTTPONLY', True)
+    app.config.setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
+    # 로컬 HTTP 개발 환경에서는 Secure=False. 프로덕션 HTTPS 에서는 env 로 True 지정.
+    app.config.setdefault(
+        'SESSION_COOKIE_SECURE',
+        os.environ.get('SESSION_COOKIE_SECURE', 'False').lower() == 'true',
+    )
+
+    # Flask-Login 초기화 + users 스키마 초기화 + 전역 인증 게이트
+    from .models import init_users_db
+    from .utils.auth import login_manager, enforce_auth
+    init_users_db()
+    login_manager.init_app(app)
+    app.before_request(enforce_auth)
 
     # 시뮬레이션 프로세스 정리 함수 등록（서버 종료 시 모든 시뮬레이션 프로세스 종료 보장）
     from .services.simulation_runner import SimulationRunner
@@ -74,7 +95,8 @@ def create_app(config_class=Config):
         return response
 
     # 블루프린트 등록
-    from .api import graph_bp, simulation_bp, report_bp, pipeline_bp
+    from .api import graph_bp, simulation_bp, report_bp, pipeline_bp, auth_bp
+    app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(graph_bp, url_prefix='/api/graph')
     app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
     app.register_blueprint(report_bp, url_prefix='/api/report')

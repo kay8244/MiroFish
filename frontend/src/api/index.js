@@ -6,7 +6,9 @@ const service = axios.create({
   timeout: 300000, // 5-minute timeout (ontology generation may take a while)
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  // 세션 쿠키 전송 (Flask-Login 기반 인증, Phase 9)
+  withCredentials: true
 })
 
 // Request interceptor
@@ -35,6 +37,19 @@ service.interceptors.response.use(
   },
   error => {
     console.error('Response error:', error)
+
+    // 401: 세션 만료 / 미인증 → 로그인 페이지로. 단, 로그인 자체 엔드포인트에서는 스킵.
+    if (error.response && error.response.status === 401) {
+      const url = (error.config && error.config.url) || ''
+      const isAuthEndpoint = url.includes('/api/auth/')
+      if (!isAuthEndpoint && typeof window !== 'undefined') {
+        const current = window.location.pathname
+        if (current !== '/login') {
+          const next = encodeURIComponent(current + window.location.search)
+          window.location.href = `/login?next=${next}`
+        }
+      }
+    }
 
     // Handle timeout
     if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
