@@ -21,6 +21,26 @@ from ..utils.logger import get_logger
 
 logger = get_logger('mirofish.simulation_ipc')
 
+# 읽기 중인 명령을 이동시키는 서브디렉토리 — double-consume 방지용
+_PROCESSING_SUBDIR = ".processing"
+
+
+def _atomic_write_json(filepath: str, data: Dict[str, Any]) -> None:
+    """tmp 파일에 쓴 뒤 원자적 rename — torn read 방지 (POSIX os.replace)"""
+    tmp_path = f"{filepath}.tmp.{os.getpid()}.{uuid.uuid4().hex[:8]}"
+    try:
+        with open(tmp_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, filepath)
+    except Exception:
+        try:
+            os.remove(tmp_path)
+        except OSError:
+            pass
+        raise
+
 
 class CommandType(str, Enum):
     """명령 유형"""
@@ -143,10 +163,9 @@ class SimulationIPCClient:
             args=args
         )
 
-        # 명령 파일 작성
+        # 명령 파일 원자적 작성 (tmp → rename)
         command_file = os.path.join(self.commands_dir, f"{command_id}.json")
-        with open(command_file, 'w', encoding='utf-8') as f:
-            json.dump(command.to_dict(), f, ensure_ascii=False, indent=2)
+        _atomic_write_json(command_file, command.to_dict())
 
         logger.info(f"IPC 명령 전송: {command_type.value}, command_id={command_id}")
 
@@ -302,10 +321,13 @@ class SimulationIPCServer:
         self.simulation_dir = simulation_dir
         self.commands_dir = os.path.join(simulation_dir, "ipc_commands")
         self.responses_dir = os.path.join(simulation_dir, "ipc_responses")
+        # Double-consume 방지: poll 시 명령을 여기로 이동시켜 다른 폴링이 못 보게 함
+        self.processing_dir = os.path.join(self.commands_dir, _PROCESSING_SUBDIR)
 
         # 디렉토리 존재 확인
         os.makedirs(self.commands_dir, exist_ok=True)
         os.makedirs(self.responses_dir, exist_ok=True)
+        os.makedirs(self.processing_dir, exist_ok=True)
 
         # 환경 상태
         self._running = False
@@ -321,61 +343,70 @@ class SimulationIPCServer:
         self._update_env_status("stopped")
 
     def _update_env_status(self, status: str):
-        """환경 상태 파일 업데이트"""
+        """환경 상태 파일 원자적 업데이트"""
         status_file = os.path.join(self.simulation_dir, "env_status.json")
-        with open(status_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                "status": status,
-                "timestamp": datetime.now().isoformat()
-            }, f, ensure_ascii=False, indent=2)
+        _atomic_write_json(status_file, {
+            "status": status,
+            "timestamp": datetime.now().isoformat()
+        })
 
     def poll_commands(self) -> Optional[IPCCommand]:
         """
-        명령 디렉토리 폴링, 첫 번째 대기 중인 명령 반환
-
-        Returns:
-            IPCCommand 또는 None
+        명령 디렉토리 폴링, 첫 번째 대기 중인 명령 반환.
+        반환 직전에 명령 파일을 processing/ 으로 원자적 이동시켜 double-consume 방지.
         """
         if not os.path.exists(self.commands_dir):
             return None
 
-        # 시간순으로 정렬하여 명령 파일 가져오기
+        # 시간순으로 정렬하여 명령 파일 가져오기 (processing/ 서브디렉토리는 제외)
         command_files = []
         for filename in os.listdir(self.commands_dir):
-            if filename.endswith('.json'):
-                filepath = os.path.join(self.commands_dir, filename)
-                command_files.append((filepath, os.path.getmtime(filepath)))
+            if not filename.endswith('.json'):
+                continue
+            filepath = os.path.join(self.commands_dir, filename)
+            if not os.path.isfile(filepath):
+                continue
+            command_files.append((filepath, filename, os.path.getmtime(filepath)))
 
-        command_files.sort(key=lambda x: x[1])
+        command_files.sort(key=lambda x: x[2])
 
-        for filepath, _ in command_files:
+        for filepath, filename, _ in command_files:
+            # 소유권 이전: commands/{id}.json → commands/.processing/{id}.json
+            # 다른 poll 호출이 이 명령을 다시 보지 못하게 함
+            processing_path = os.path.join(self.processing_dir, filename)
             try:
-                with open(filepath, 'r', encoding='utf-8') as f:
+                os.replace(filepath, processing_path)
+            except OSError as e:
+                # 이미 다른 poller가 가져감 (race) — 스킵
+                logger.debug(f"poll race: {filepath} 이미 이동됨 ({e})")
+                continue
+
+            try:
+                with open(processing_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 return IPCCommand.from_dict(data)
             except (json.JSONDecodeError, KeyError, OSError) as e:
-                logger.warning(f"명령 파일 읽기 실패: {filepath}, {e}")
+                logger.warning(f"명령 파일 읽기 실패: {processing_path}, {e}")
+                # 파싱 실패한 파일은 그대로 processing/ 에 남겨두어 재시도 X (orphan)
                 continue
 
         return None
 
     def send_response(self, response: IPCResponse):
-        """
-        응답 전송
-
-        Args:
-            response: IPC 응답
-        """
+        """응답 원자적 전송 + processing/ 의 명령 파일 정리"""
         response_file = os.path.join(self.responses_dir, f"{response.command_id}.json")
-        with open(response_file, 'w', encoding='utf-8') as f:
-            json.dump(response.to_dict(), f, ensure_ascii=False, indent=2)
+        _atomic_write_json(response_file, response.to_dict())
 
-        # 명령 파일 삭제
-        command_file = os.path.join(self.commands_dir, f"{response.command_id}.json")
-        try:
-            os.remove(command_file)
-        except OSError:
-            pass
+        # 처리 완료된 명령 파일 삭제 (processing/ → commands/ 순으로 확인)
+        for cmd_path in (
+            os.path.join(self.processing_dir, f"{response.command_id}.json"),
+            os.path.join(self.commands_dir, f"{response.command_id}.json"),
+        ):
+            try:
+                os.remove(cmd_path)
+                break
+            except OSError:
+                continue
 
     def send_success(self, command_id: str, result: Dict[str, Any]):
         """성공 응답 전송"""

@@ -5,10 +5,21 @@
 
 import uuid
 import threading
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, field
+
+from ..utils.logger import get_logger
+
+_logger = get_logger('mirofish.task_manager')
+
+# Lazy cleanup: N번 create마다 1번 오래된 태스크 정리 (부하 무시 가능)
+_CLEANUP_EVERY_N_CREATES = 100
+# PROCESSING 상태로 N분 이상 멈춰있으면 고아 태스크로 간주 → FAILED 전환
+_STALE_PROCESSING_MINUTES = 60
+# COMPLETED/FAILED 태스크는 N시간 뒤 삭제
+_COMPLETED_MAX_AGE_HOURS = 24
 
 
 class TaskStatus(str, Enum):
@@ -68,6 +79,7 @@ class TaskManager:
                     cls._instance = super().__new__(cls)
                     cls._instance._tasks: Dict[str, Task] = {}
                     cls._instance._task_lock = threading.Lock()
+                    cls._instance._create_count = 0
         return cls._instance
 
     def create_task(self, task_type: str, metadata: Optional[Dict] = None) -> str:
@@ -95,6 +107,11 @@ class TaskManager:
 
         with self._task_lock:
             self._tasks[task_id] = task
+            self._create_count += 1
+            should_cleanup = self._create_count % _CLEANUP_EVERY_N_CREATES == 0
+
+        if should_cleanup:
+            self._run_lazy_cleanup()
 
         return task_id
 
@@ -169,9 +186,8 @@ class TaskManager:
                 tasks = [t for t in tasks if t.task_type == task_type]
             return [t.to_dict() for t in sorted(tasks, key=lambda x: x.created_at, reverse=True)]
 
-    def cleanup_old_tasks(self, max_age_hours: int = 24):
-        """오래된 태스크 정리"""
-        from datetime import timedelta
+    def cleanup_old_tasks(self, max_age_hours: int = _COMPLETED_MAX_AGE_HOURS):
+        """오래된 COMPLETED/FAILED 태스크 삭제"""
         cutoff = datetime.now() - timedelta(hours=max_age_hours)
 
         with self._task_lock:
@@ -181,4 +197,31 @@ class TaskManager:
             ]
             for tid in old_ids:
                 del self._tasks[tid]
+        if old_ids:
+            _logger.info(f"오래된 태스크 정리: {len(old_ids)}건 삭제")
+
+    def reap_stale_processing(self, stale_minutes: int = _STALE_PROCESSING_MINUTES):
+        """updated_at 이 stale_minutes 이상 지난 PROCESSING 태스크를 FAILED로 전환 (고아 태스크)"""
+        cutoff = datetime.now() - timedelta(minutes=stale_minutes)
+        stale_ids = []
+
+        with self._task_lock:
+            for tid, task in self._tasks.items():
+                if task.status == TaskStatus.PROCESSING and task.updated_at < cutoff:
+                    task.status = TaskStatus.FAILED
+                    task.error = f"stale: {stale_minutes}분 이상 업데이트 없음 (프로세스 크래시 추정)"
+                    task.message = "고아 태스크로 판정됨"
+                    task.updated_at = datetime.now()
+                    stale_ids.append(tid)
+
+        if stale_ids:
+            _logger.warning(f"고아 PROCESSING 태스크 FAILED 전환: {len(stale_ids)}건")
+
+    def _run_lazy_cleanup(self):
+        """create_task 에서 주기적으로 호출되는 백그라운드 정리"""
+        try:
+            self.reap_stale_processing()
+            self.cleanup_old_tasks()
+        except Exception as e:
+            _logger.warning(f"lazy cleanup 실패 (무시): {e}")
 
