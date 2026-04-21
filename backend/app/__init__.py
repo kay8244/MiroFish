@@ -39,8 +39,9 @@ def create_app(config_class=Config):
         logger.info("MiroFish Backend 시작 중...")
         logger.info("=" * 50)
 
-    # CORS 활성화
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    # CORS 활성화 — whitelist (개발: localhost:3000, 배포: CORS_ORIGINS env로 override)
+    cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
+    CORS(app, resources={r"/api/*": {"origins": [o.strip() for o in cors_origins]}})
 
     # 시뮬레이션 프로세스 정리 함수 등록（서버 종료 시 모든 시뮬레이션 프로세스 종료 보장）
     from .services.simulation_runner import SimulationRunner
@@ -60,6 +61,16 @@ def create_app(config_class=Config):
     def log_response(response):
         logger = get_logger('mirofish.request')
         logger.debug(f"응답: {response.status_code}")
+        return response
+
+    # 보안 헤더 (API 응답): API는 리소스 로드/iframe 임베드가 불필요
+    @app.after_request
+    def add_security_headers(response):
+        response.headers.setdefault(
+            'Content-Security-Policy',
+            "default-src 'none'; frame-ancestors 'none'"
+        )
+        response.headers.setdefault('X-Content-Type-Options', 'nosniff')
         return response
 
     # 블루프린트 등록
