@@ -114,11 +114,33 @@ export function useScenarioRun() {
       if (prepareRes?.data?.already_prepared) {
         // 새 sim 이라 거의 발생 안 함
       } else {
+        // task_id 가 있어야 backend 가 task 의 진짜 상태 (failed 등)를 리턴함.
+        // 누락하면 backend 는 "not_started" placeholder 리턴 → 폴링 무한 루프.
+        const prepareTaskId = prepareRes?.data?.task_id
         await _poll(
-          () => getPrepareStatus({ simulation_id: newSimId }),
+          async () => {
+            // 두 소스 동시 확인: (1) task 상태, (2) sim 자체 상태
+            // task 가 사라졌거나 sim 이 직접 failed 로 마킹된 경우도 잡아야 함.
+            const [statusRes, simRes] = await Promise.all([
+              getPrepareStatus({
+                ...(prepareTaskId ? { task_id: prepareTaskId } : {}),
+                simulation_id: newSimId,
+              }),
+              getSimulation(newSimId),
+            ])
+            return { status: statusRes?.data, sim: simRes?.data }
+          },
           (res) => {
-            const st = res?.data?.status
-            if (st === 'ready') return 'done'
+            const st = res?.status?.status
+            const simStatus = res?.sim?.status
+            const simError = res?.sim?.error
+            // sim 이 failed 면 즉시 종료 (backend 가 task fail 표시 못한 경우 대비)
+            if (simStatus === 'failed') {
+              // 에러 메시지를 폴링 함수가 잡을 수 있도록 res 에 주입
+              res.error = simError || 'simulation failed'
+              return 'fail'
+            }
+            if (st === 'ready' || st === 'completed' || simStatus === 'ready') return 'done'
             if (st === 'failed') return 'fail'
             return null
           },
