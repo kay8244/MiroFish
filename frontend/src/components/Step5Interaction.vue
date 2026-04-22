@@ -27,6 +27,7 @@
           @toggle-dropdown="toggleAgentDropdown"
           @select-agent="selectAgent"
           @select-survey="selectSurveyTab"
+          @select-scenario="selectScenarioTab"
         />
 
         <!-- Chat Mode -->
@@ -68,6 +69,12 @@
           @update:surveyQuestion="survey.surveyQuestion.value = $event"
           @submit="survey.submitSurvey"
         />
+
+        <!-- B 시나리오: 같은 graph + 새 질문 → 시뮬+보고서 -->
+        <ScenarioPanel
+          v-if="activeTab === 'scenario' && simulationId"
+          :simulationId="simulationId"
+        />
       </div>
     </div>
   </div>
@@ -85,6 +92,7 @@ import ChatMessages from './interaction/ChatMessages.vue'
 import SurveyPanel from './interaction/SurveyPanel.vue'
 import ReportAgentToolsCard from './interaction/ReportAgentToolsCard.vue'
 import AgentProfileCard from './interaction/AgentProfileCard.vue'
+import ScenarioPanel from './interaction/ScenarioPanel.vue'
 
 const props = defineProps({
   reportId: String,
@@ -239,6 +247,13 @@ const selectReportAgentChat = () => {
 
 const selectSurveyTab = () => {
   activeTab.value = 'survey'
+  selectedAgent.value = null
+  selectedAgentIndex.value = null
+  showAgentDropdown.value = false
+}
+
+const selectScenarioTab = () => {
+  activeTab.value = 'scenario'
   selectedAgent.value = null
   selectedAgentIndex.value = null
   showAgentDropdown.value = false

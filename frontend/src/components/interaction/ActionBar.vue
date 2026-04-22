@@ -63,6 +63,18 @@
         </svg>
         <span>Send survey to the world</span>
       </button>
+      <button
+        class="tab-pill scenario-pill"
+        :class="{ active: activeTab === 'scenario' }"
+        @click="$emit('select-scenario')"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="6"></circle>
+          <circle cx="12" cy="12" r="2"></circle>
+        </svg>
+        <span>Run new scenario</span>
+      </button>
     </div>
   </div>
 </template>
@@ -76,7 +88,7 @@ defineProps({
   showAgentDropdown: { type: Boolean, default: false }
 })
 
-defineEmits(['select-report-agent', 'toggle-dropdown', 'select-agent', 'select-survey'])
+defineEmits(['select-report-agent', 'toggle-dropdown', 'select-agent', 'select-survey', 'select-scenario'])
 </script>
 
 <style scoped>
