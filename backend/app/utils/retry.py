@@ -36,6 +36,26 @@ def _is_non_retryable(exc: BaseException) -> bool:
     return any(p in msg for p in NON_RETRYABLE_PATTERNS)
 
 
+# Fix G2: rate_limit_error 는 분당 한도라 짧은 backoff (2-8s) 로는 회복 불가.
+# 60초 기다려야 다음 분 윈도우에서 한도 갱신됨. 패턴 매치 시 강제 60s 대기.
+RATE_LIMIT_PATTERNS: Tuple[str, ...] = (
+    'rate_limit_error',
+    'rate_limit_exceeded',
+    'rate limit exceeded',
+    'tokens per minute',
+    'requests per minute',
+    'tpm',
+    'rpm',
+)
+RATE_LIMIT_BACKOFF_S: float = 65.0  # Anthropic per-minute window 1바퀴 + 마진 5s
+
+
+def _is_rate_limit(exc: BaseException) -> bool:
+    """rate_limit 에러 (분당 토큰/요청 한도 초과) 인지 검사."""
+    msg = str(exc).lower()
+    return any(p in msg for p in RATE_LIMIT_PATTERNS)
+
+
 def retry_with_backoff(
     max_retries: int = 3,
     initial_delay: float = 1.0,
@@ -86,15 +106,22 @@ def retry_with_backoff(
                         logger.error(f"함수 {func.__name__} 이(가) {max_retries}번 재시도 후에도 실패: {str(e)}")
                         raise
 
-                    # 지연 시간 계산
-                    current_delay = min(delay, max_delay)
-                    if jitter:
-                        current_delay = current_delay * (0.5 + random.random())
-
-                    logger.warning(
-                        f"함수 {func.__name__} 의 {attempt + 1}번째 시도 실패: {str(e)}, "
-                        f"{current_delay:.1f}초 후 재시도..."
-                    )
+                    # Fix G2: rate_limit 은 분당 윈도우 → 강제 60s+ backoff
+                    if _is_rate_limit(e):
+                        current_delay = RATE_LIMIT_BACKOFF_S
+                        logger.warning(
+                            f"함수 {func.__name__} rate_limit 감지 (시도 {attempt + 1}): "
+                            f"{current_delay:.0f}초 대기 (분당 윈도우 회복)..."
+                        )
+                    else:
+                        # 일반 backoff
+                        current_delay = min(delay, max_delay)
+                        if jitter:
+                            current_delay = current_delay * (0.5 + random.random())
+                        logger.warning(
+                            f"함수 {func.__name__} 의 {attempt + 1}번째 시도 실패: {str(e)}, "
+                            f"{current_delay:.1f}초 후 재시도..."
+                        )
 
                     if on_retry:
                         on_retry(e, attempt + 1)
@@ -145,6 +172,19 @@ def retry_with_backoff_async(
                     if attempt == max_retries:
                         logger.error(f"비동기 함수 {func.__name__} 이(가) {max_retries}번 재시도 후에도 실패: {str(e)}")
                         raise
+
+                    # Fix G2: rate_limit 강제 long backoff (60s+)
+                    if _is_rate_limit(e):
+                        current_delay = RATE_LIMIT_BACKOFF_S
+                        logger.warning(
+                            f"비동기 함수 {func.__name__} rate_limit 감지 (시도 {attempt + 1}): "
+                            f"{current_delay:.0f}초 대기..."
+                        )
+                        if on_retry:
+                            on_retry(e, attempt + 1)
+                        await asyncio.sleep(current_delay)
+                        delay *= backoff_factor
+                        continue
 
                     current_delay = min(delay, max_delay)
                     if jitter:

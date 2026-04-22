@@ -32,6 +32,13 @@ from typing import Any, Callable, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+# Fix G0: graphiti_core helpers.py 가 모듈 로드 시점에 SEMAPHORE_LIMIT 을 읽음
+# (default 20). 기본값은 한 add_episode 안의 nested LLM 호출 5+ 가 한꺼번에
+# burst → Anthropic Tier 1 분당 토큰 한도 (450K/min) 즉시 초과. 2로 직렬화하면
+# nested 호출이 throttle 되어 rate limit 안 부딪힘. graphiti_client import 전에
+# 반드시 set 되어야 효과 있음 (helpers.py 가 import time 에 읽음).
+os.environ.setdefault('SEMAPHORE_LIMIT', '2')
+
 from ..models.task import TaskManager, TaskStatus
 from ..utils.graphiti_client import GraphitiConfig, create_graphiti, neo4j_driver
 from ..utils.graphiti_paging import fetch_all_edges, fetch_all_nodes
