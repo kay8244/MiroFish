@@ -12,6 +12,30 @@ from ..utils.logger import get_logger
 logger = get_logger('mirofish.retry')
 
 
+# Fix E: quota/auth 에러는 재시도해도 해결되지 않으므로 fail-fast.
+# 에러 메시지에 아래 패턴이 포함되면 즉시 raise (재시도 X).
+NON_RETRYABLE_PATTERNS: Tuple[str, ...] = (
+    'insufficient_quota',
+    'quota_exceeded',
+    'invalid_api_key',
+    'authentication_error',
+    'incorrect_api_key',
+    'account_deactivated',
+    'billing_not_active',
+    'permission_denied',
+)
+
+
+def _is_non_retryable(exc: BaseException) -> bool:
+    """에러 메시지가 non-retryable 패턴(quota/auth)을 포함하는지 검사.
+
+    LLM provider별로 에러 메시지 포맷이 다르지만 'insufficient_quota',
+    'invalid_api_key' 같은 공통 토큰을 match해서 조기 중단.
+    """
+    msg = str(exc).lower()
+    return any(p in msg for p in NON_RETRYABLE_PATTERNS)
+
+
 def retry_with_backoff(
     max_retries: int = 3,
     initial_delay: float = 1.0,
@@ -50,6 +74,13 @@ def retry_with_backoff(
 
                 except exceptions as e:
                     last_exception = e
+
+                    # Fix E: quota/auth 에러는 재시도 무의미 → fail-fast
+                    if _is_non_retryable(e):
+                        logger.error(
+                            f"함수 {func.__name__}: 재시도 불가 에러 (quota/auth) → 즉시 실패: {str(e)}"
+                        )
+                        raise
 
                     if attempt == max_retries:
                         logger.error(f"함수 {func.__name__} 이(가) {max_retries}번 재시도 후에도 실패: {str(e)}")
@@ -103,6 +134,13 @@ def retry_with_backoff_async(
 
                 except exceptions as e:
                     last_exception = e
+
+                    # Fix E: quota/auth 에러는 재시도 무의미 → fail-fast
+                    if _is_non_retryable(e):
+                        logger.error(
+                            f"비동기 함수 {func.__name__}: 재시도 불가 에러 (quota/auth) → 즉시 실패: {str(e)}"
+                        )
+                        raise
 
                     if attempt == max_retries:
                         logger.error(f"비동기 함수 {func.__name__} 이(가) {max_retries}번 재시도 후에도 실패: {str(e)}")

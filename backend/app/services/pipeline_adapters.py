@@ -73,19 +73,23 @@ def graph_adapter(ctx: StepContext) -> dict:
         'AI 서버 → SI 웨이퍼 수요 예측 (한국어 시뮬레이션)',
     )
 
-    # 1) 온톨로지 생성
-    logger.info('graph: ontology 생성 중...')
-    ontology_gen = OntologyGenerator()
-    ontology = ontology_gen.generate(
-        document_texts=[document_text],
-        simulation_requirement=simulation_requirement,
-    )
-
-    # tmp_dir에 ontology 보관 (디버깅/audit 용)
-    (ctx.tmp_dir / 'ontology.json').write_text(
-        json.dumps(ontology, ensure_ascii=False, indent=2),
-        encoding='utf-8',
-    )
+    # 1) 온톨로지 생성 (Fix F: tmp_dir 캐시 — step retry 시 재생성 방지)
+    ontology_cache = ctx.tmp_dir / 'ontology.json'
+    if ontology_cache.exists():
+        logger.info(f'graph: ontology 재사용 (이전 retry 결과: {ontology_cache})')
+        ontology = json.loads(ontology_cache.read_text(encoding='utf-8'))
+    else:
+        logger.info('graph: ontology 생성 중...')
+        ontology_gen = OntologyGenerator()
+        ontology = ontology_gen.generate(
+            document_texts=[document_text],
+            simulation_requirement=simulation_requirement,
+        )
+        # tmp_dir에 ontology 보관 (디버깅/audit + 다음 retry 재사용)
+        ontology_cache.write_text(
+            json.dumps(ontology, ensure_ascii=False, indent=2),
+            encoding='utf-8',
+        )
 
     # 2) Zep graph 비동기 구축
     chunk_size = ctx.config.get('chunk_size', 500)
