@@ -73,6 +73,12 @@ class SimulationState:
     enable_twitter: bool = True
     enable_reddit: bool = True
 
+    # B 시나리오: 이 시뮬레이션에만 적용되는 requirement 오버라이드.
+    # None 이면 project.simulation_requirement 사용 (기존 동작).
+    # 값이 있으면 prepare/generate/chat 에서 우선 사용 → 같은 graph 위에
+    # 여러 시나리오를 독립된 시뮬로 돌릴 수 있음.
+    simulation_requirement: Optional[str] = None
+
     # 상태
     status: SimulationStatus = SimulationStatus.CREATED
 
@@ -105,6 +111,7 @@ class SimulationState:
             "graph_id": self.graph_id,
             "enable_twitter": self.enable_twitter,
             "enable_reddit": self.enable_reddit,
+            "simulation_requirement": self.simulation_requirement,
             "status": self.status.value,
             "entities_count": self.entities_count,
             "profiles_count": self.profiles_count,
@@ -195,6 +202,7 @@ class SimulationManager:
             graph_id=data.get("graph_id", ""),
             enable_twitter=data.get("enable_twitter", True),
             enable_reddit=data.get("enable_reddit", True),
+            simulation_requirement=data.get("simulation_requirement"),
             status=SimulationStatus(data.get("status", "created")),
             entities_count=data.get("entities_count", 0),
             profiles_count=data.get("profiles_count", 0),
@@ -218,6 +226,7 @@ class SimulationManager:
         graph_id: str,
         enable_twitter: bool = True,
         enable_reddit: bool = True,
+        simulation_requirement: Optional[str] = None,
     ) -> SimulationState:
         """
         새 시뮬레이션 생성
@@ -227,6 +236,8 @@ class SimulationManager:
             graph_id: Zep 그래프 ID
             enable_twitter: Twitter 시뮬레이션 활성화 여부
             enable_reddit: Reddit 시뮬레이션 활성화 여부
+            simulation_requirement: 시나리오 질문 오버라이드 (B 시나리오).
+                None 이면 project.simulation_requirement 기본값 사용.
 
         Returns:
             SimulationState
@@ -240,6 +251,7 @@ class SimulationManager:
             graph_id=graph_id,
             enable_twitter=enable_twitter,
             enable_reddit=enable_reddit,
+            simulation_requirement=simulation_requirement,
             status=SimulationStatus.CREATED,
         )
 

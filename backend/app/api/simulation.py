@@ -232,12 +232,19 @@ def create_simulation():
                 "error": "프로젝트에 그래프가 아직 구축되지 않았습니다. 먼저 /api/graph/build 를 호출해주세요"
             }), 400
 
+        # B 시나리오: simulation_requirement 오버라이드 허용.
+        # 지정 시 이 sim 에만 적용되고, 생략 시 prepare 에서 project 값으로 fallback.
+        sim_requirement_override = data.get('simulation_requirement')
+        if sim_requirement_override is not None:
+            sim_requirement_override = str(sim_requirement_override).strip() or None
+
         manager = SimulationManager()
         state = manager.create_simulation(
             project_id=project_id,
             graph_id=graph_id,
             enable_twitter=data.get('enable_twitter', True),
             enable_reddit=data.get('enable_reddit', True),
+            simulation_requirement=sim_requirement_override,
         )
 
         return jsonify({
@@ -471,12 +478,24 @@ def prepare_simulation():
                 "error": f"프로젝트가 존재하지 않음: {state.project_id}"
             }), 404
 
-        # 시뮬레이션 요구사항 가져오기
-        simulation_requirement = project.simulation_requirement or ""
+        # 시뮬레이션 요구사항: state 오버라이드 > project 기본값 (B 시나리오 지원).
+        # payload 로 이번 prepare 호출에서만 오버라이드도 허용.
+        prepare_override = data.get('simulation_requirement')
+        if prepare_override is not None:
+            prepare_override = str(prepare_override).strip() or None
+        if prepare_override:
+            # 이번 prepare 호출 내내 이 값을 사용하고 state 에도 영구 반영
+            state.simulation_requirement = prepare_override
+            manager._save_simulation_state(state)
+        simulation_requirement = (
+            state.simulation_requirement
+            or project.simulation_requirement
+            or ""
+        )
         if not simulation_requirement:
             return jsonify({
                 "success": False,
-                "error": "프로젝트에 시뮬레이션 요구사항 설명이 없습니다 (simulation_requirement)"
+                "error": "시뮬레이션 요구사항이 없습니다 (simulation/create 의 simulation_requirement 또는 project.simulation_requirement 중 하나 필요)"
             }), 400
 
         # 문서 텍스트 가져오기

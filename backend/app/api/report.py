@@ -100,7 +100,8 @@ def generate_report():
                 "error": "그래프 ID가 없습니다. 그래프를 먼저 구축했는지 확인하세요"
             }), 400
 
-        simulation_requirement = project.simulation_requirement
+        # B 시나리오: sim-level override > project 기본값
+        simulation_requirement = state.simulation_requirement or project.simulation_requirement
         if not simulation_requirement:
             return jsonify({
                 "success": False,
@@ -537,7 +538,8 @@ def chat_with_report_agent():
                 "error": "그래프 ID가 없습니다"
             }), 400
 
-        simulation_requirement = project.simulation_requirement or ""
+        # B 시나리오: sim-level override > project 기본값
+        simulation_requirement = state.simulation_requirement or project.simulation_requirement or ""
 
         # Agent 생성 후 대화
         agent = ReportAgent(
