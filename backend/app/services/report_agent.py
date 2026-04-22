@@ -620,8 +620,6 @@ SECTION_SYSTEM_PROMPT_TEMPLATE = """\
 보고서 요약: {report_summary}
 예측 시나리오 (시뮬레이션 요구사항): {simulation_requirement}
 
-현재 작성할 챕터: {section_title}
-
 ═══════════════════════════════════════════════════════════════
 【핵심 이념】
 ═══════════════════════════════════════════════════════════════
@@ -1256,11 +1254,12 @@ class ReportAgent:
         if self.report_logger:
             self.report_logger.log_section_start(section.title, section_index)
         
+        # Fix C: section_title 은 system 에서 제거하여 섹션 간 prompt caching 재사용.
+        # section_title 은 user_prompt 에만 포함 (SECTION_USER_PROMPT_TEMPLATE 내 이미 있음).
         system_prompt = SECTION_SYSTEM_PROMPT_TEMPLATE.format(
             report_title=outline.title,
             report_summary=outline.summary,
             simulation_requirement=self.simulation_requirement,
-            section_title=section.title,
             tools_description=self._get_tools_description(),
         )
 

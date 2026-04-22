@@ -289,8 +289,13 @@ class PanoramaResult:
             "historical_count": self.historical_count
         }
     
-    def to_text(self) -> str:
-        """텍스트 형식으로 변환 (완전한 버전, 잘림 없음)"""
+    def to_text(self, max_facts: int = 50, max_nodes: int = 50) -> str:
+        """텍스트 형식으로 변환.
+
+        Fix D: context bloat 억제를 위해 상한 적용.
+        max_facts: active + historical 각각의 최대 출력 건수 (기본 50).
+        max_nodes: 출력할 엔티티 최대 건수 (기본 50).
+        """
         text_parts = [
             f"## 광범위 검색 결과 (미래 전체 조망)",
             f"쿼리: {self.query}",
@@ -300,26 +305,38 @@ class PanoramaResult:
             f"- 현재 유효한 사실: {self.active_count}건",
             f"- 역사/만료된 사실: {self.historical_count}건"
         ]
-        
-        # 현재 유효한 사실 (완전 출력, 잘림 없음)
+
+        # 현재 유효한 사실 (상위 max_facts 건만)
         if self.active_facts:
+            shown = self.active_facts[:max_facts]
+            truncated = len(self.active_facts) > max_facts
             text_parts.append(f"\n### 【현재 유효한 사실】(시뮬레이션 결과 원문)")
-            for i, fact in enumerate(self.active_facts, 1):
+            for i, fact in enumerate(shown, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
-        
-        # 역사/만료된 사실 (완전 출력, 잘림 없음)
+            if truncated:
+                text_parts.append(f"... (총 {len(self.active_facts)}건 중 상위 {max_facts}건 표시, 나머지 생략)")
+
+        # 역사/만료된 사실 (상위 max_facts 건만)
         if self.historical_facts:
+            shown = self.historical_facts[:max_facts]
+            truncated = len(self.historical_facts) > max_facts
             text_parts.append(f"\n### 【역사/만료된 사실】(변화 과정 기록)")
-            for i, fact in enumerate(self.historical_facts, 1):
+            for i, fact in enumerate(shown, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
-        
-        # 핵심 엔티티 (완전 출력, 잘림 없음)
+            if truncated:
+                text_parts.append(f"... (총 {len(self.historical_facts)}건 중 상위 {max_facts}건 표시, 나머지 생략)")
+
+        # 핵심 엔티티 (상위 max_nodes 건만)
         if self.all_nodes:
+            shown_nodes = self.all_nodes[:max_nodes]
+            truncated = len(self.all_nodes) > max_nodes
             text_parts.append(f"\n### 【관련 엔티티】")
-            for node in self.all_nodes:
+            for node in shown_nodes:
                 entity_type = next((l for l in node.labels if l not in ["Entity", "Node"]), "엔티티")
                 text_parts.append(f"- **{node.name}** ({entity_type})")
-        
+            if truncated:
+                text_parts.append(f"... (총 {len(self.all_nodes)}개 중 상위 {max_nodes}개 표시, 나머지 생략)")
+
         return "\n".join(text_parts)
 
 
@@ -414,8 +431,12 @@ class InterviewResult:
             "interviewed_count": self.interviewed_count
         }
     
-    def to_text(self) -> str:
-        """상세한 텍스트 형식으로 변환, LLM 이해 및 보고서 인용용"""
+    def to_text(self, max_interviews: int = 5) -> str:
+        """상세한 텍스트 형식으로 변환, LLM 이해 및 보고서 인용용.
+
+        Fix D: context bloat 억제를 위해 상한 적용.
+        max_interviews: 출력할 인터뷰 최대 건수 (기본 5).
+        """
         text_parts = [
             "## 심층 인터뷰 보고서",
             f"**인터뷰 주제:** {self.interview_topic}",
@@ -427,10 +448,16 @@ class InterviewResult:
         ]
 
         if self.interviews:
-            for i, interview in enumerate(self.interviews, 1):
+            shown = self.interviews[:max_interviews]
+            truncated = len(self.interviews) > max_interviews
+            for i, interview in enumerate(shown, 1):
                 text_parts.append(f"\n#### 인터뷰 #{i}: {interview.agent_name}")
                 text_parts.append(interview.to_text())
                 text_parts.append("\n---")
+            if truncated:
+                text_parts.append(
+                    f"... (총 {len(self.interviews)}건 중 상위 {max_interviews}건 표시, 나머지 생략)"
+                )
         else:
             text_parts.append("（인터뷰 기록 없음）\n\n---")
 
