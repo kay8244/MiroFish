@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -43,7 +44,8 @@ logger = logging.getLogger('mirofish.pipeline_adapters')
 
 # graph_builder.build_graph_async 비동기 폴링 설정
 _GRAPH_POLL_INTERVAL_S = 5
-_GRAPH_POLL_MAX_S = 9 * 60  # 10분 wall-clock에서 1분 버퍼
+# Fix G4: wall-clock 40분에 맞춰 polling 도 35분으로 (5분 마진).
+_GRAPH_POLL_MAX_S = 35 * 60
 
 
 def graph_adapter(ctx: StepContext) -> dict:
@@ -97,6 +99,47 @@ def graph_adapter(ctx: StepContext) -> dict:
     batch_size = ctx.config.get('zep_batch_size', 3)
     graph_name = f'MiroFish run {ctx.run_id[:8]}'
 
+    # Fix G4: graph_progress.json 으로 retry 시 처리된 chunk + graph_id 보존.
+    # 형태: {"graph_id": "mirofish_xxx", "chunks_processed": [0,1,2]}
+    progress_file = ctx.tmp_dir / 'graph_progress.json'
+    progress_lock = threading.Lock()
+    existing_graph_id = None
+    skip_chunk_indices: list = []
+    if progress_file.exists():
+        try:
+            prev_progress = json.loads(progress_file.read_text(encoding='utf-8'))
+            existing_graph_id = prev_progress.get('graph_id')
+            skip_chunk_indices = list(prev_progress.get('chunks_processed') or [])
+            logger.info(
+                f'graph: 이전 retry 진행분 발견 — graph_id={existing_graph_id}, '
+                f'스킵할 chunks={len(skip_chunk_indices)}개'
+            )
+        except Exception as e:
+            logger.warning(f'graph_progress.json 파싱 실패, 새로 시작: {e}')
+            existing_graph_id = None
+            skip_chunk_indices = []
+
+    def _on_chunk_completed(idx: int, gid: str) -> None:
+        """builder thread 에서 호출. 원자적 쓰기로 race 방지."""
+        with progress_lock:
+            try:
+                cur = {}
+                if progress_file.exists():
+                    cur = json.loads(progress_file.read_text(encoding='utf-8'))
+                cur['graph_id'] = gid
+                processed = list(cur.get('chunks_processed') or [])
+                if idx not in processed:
+                    processed.append(idx)
+                cur['chunks_processed'] = processed
+                tmp = progress_file.with_suffix('.tmp')
+                tmp.write_text(
+                    json.dumps(cur, ensure_ascii=False, indent=2),
+                    encoding='utf-8',
+                )
+                tmp.replace(progress_file)
+            except Exception as e:
+                logger.warning(f'progress 저장 실패 idx={idx}: {e}')
+
     builder = GraphBuilderService()
     task_id = builder.build_graph_async(
         text=document_text,
@@ -105,6 +148,9 @@ def graph_adapter(ctx: StepContext) -> dict:
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         batch_size=batch_size,
+        existing_graph_id=existing_graph_id,
+        skip_chunk_indices=skip_chunk_indices,
+        chunk_completed_callback=_on_chunk_completed,
     )
     logger.info(f'graph: build_graph_async task_id={task_id}, 폴링 시작')
 

@@ -139,8 +139,18 @@ class GraphBuilderService:
         chunk_size: int = 500,
         chunk_overlap: int = 50,
         batch_size: int = 3,  # legacy, ignored
+        existing_graph_id: Optional[str] = None,
+        skip_chunk_indices: Optional[List[int]] = None,
+        chunk_completed_callback: Optional[Callable[[int, str], None]] = None,
     ) -> str:
-        """비동기 그래프 구축 시작. 호출 즉시 task_id 반환."""
+        """비동기 그래프 구축 시작. 호출 즉시 task_id 반환.
+
+        Fix G4 추가 파라미터:
+            existing_graph_id: 재시도 시 기존 graph_id 재사용 (None 이면 새로 생성)
+            skip_chunk_indices: 이미 처리된 chunk 인덱스 (재시도 시 스킵)
+            chunk_completed_callback: chunk 처리 완료 시 호출 (idx, graph_id) →
+                graph_adapter 가 progress 영속화에 사용
+        """
         task_id = self.task_manager.create_task(
             task_type='graph_build',
             metadata={
@@ -152,7 +162,10 @@ class GraphBuilderService:
         )
         t = threading.Thread(
             target=self._worker,
-            args=(task_id, text, ontology, graph_name, chunk_size, chunk_overlap),
+            args=(
+                task_id, text, ontology, graph_name, chunk_size, chunk_overlap,
+                existing_graph_id, skip_chunk_indices, chunk_completed_callback,
+            ),
             name=f'graph-build-{task_id[:8]}',
             daemon=True,
         )
@@ -169,6 +182,9 @@ class GraphBuilderService:
         graph_name: str,
         chunk_size: int,
         chunk_overlap: int,
+        existing_graph_id: Optional[str] = None,
+        skip_chunk_indices: Optional[List[int]] = None,
+        chunk_completed_callback: Optional[Callable[[int, str], None]] = None,
     ) -> None:
         """TaskManager thread worker. asyncio 루프는 여기서 띄운다."""
         try:
@@ -180,7 +196,8 @@ class GraphBuilderService:
             )
             result = asyncio.run(
                 self._build_async(
-                    task_id, text, ontology, graph_name, chunk_size, chunk_overlap
+                    task_id, text, ontology, graph_name, chunk_size, chunk_overlap,
+                    existing_graph_id, skip_chunk_indices, chunk_completed_callback,
                 )
             )
             self.task_manager.complete_task(task_id, result)
@@ -197,9 +214,19 @@ class GraphBuilderService:
         graph_name: str,
         chunk_size: int,
         chunk_overlap: int,
+        existing_graph_id: Optional[str] = None,
+        skip_chunk_indices: Optional[List[int]] = None,
+        chunk_completed_callback: Optional[Callable[[int, str], None]] = None,
     ) -> Dict[str, Any]:
-        graph_id = f'mirofish_{uuid.uuid4().hex[:16]}'
+        # Fix G4: existing_graph_id 있으면 재사용 (retry 시 부분 진행분 보존).
+        # 없으면 새로 생성.
+        if existing_graph_id:
+            graph_id = existing_graph_id
+            logger.info(f'graph build 재개 (existing_graph_id={graph_id})')
+        else:
+            graph_id = f'mirofish_{uuid.uuid4().hex[:16]}'
         group_id = graph_id  # Graphiti namespace로 재사용
+        skip_set = set(skip_chunk_indices or [])
         logger.info(f'graph build 시작 group_id={group_id} name={graph_name!r}')
 
         self.task_manager.update_task(
@@ -251,12 +278,19 @@ class GraphBuilderService:
             lock = asyncio.Lock()
 
             async def add_one(idx: int, chunk: str) -> None:
+                # Fix G4: 이미 처리된 chunk 는 스킵 (retry 비용 절감)
+                if idx in skip_set:
+                    async with lock:
+                        completed['count'] += 1
+                    logger.info(f'chunk {idx + 1}/{total} 스킵 (이전 retry 에서 처리됨)')
+                    return
                 async with outer_semaphore:
                     await _add_one_unlocked(idx, chunk)
                     if chunk_delay_s > 0:
                         await asyncio.sleep(chunk_delay_s)
 
             async def _add_one_unlocked(idx: int, chunk: str) -> None:
+                success = False
                 try:
                     # EpisodeType import는 버전 따라 위치가 달라 graceful fallback
                     source = None
@@ -282,10 +316,17 @@ class GraphBuilderService:
                         await graphiti.add_episode(**kwargs, edge_types=edge_types)
                     except TypeError:
                         await graphiti.add_episode(**kwargs)
+                    success = True
                 finally:
                     async with lock:
                         completed['count'] += 1
                         done = completed['count']
+                    # Fix G4: 성공한 경우만 callback (외부에서 progress 영속화)
+                    if success and chunk_completed_callback:
+                        try:
+                            chunk_completed_callback(idx, group_id)
+                        except Exception as cb_err:
+                            logger.warning(f'chunk_completed_callback 실패 idx={idx}: {cb_err}')
                     # 20 ~ 85% 범위에서 진행률 반영
                     if done % max(1, total // 10) == 0 or done == total:
                         self.task_manager.update_task(

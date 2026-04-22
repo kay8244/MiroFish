@@ -70,7 +70,10 @@ STEP_NAMES = ['seed_upload', 'graph', 'agents', 'simulation', 'report']
 
 WALL_CLOCK_SECONDS = {
     'seed_upload': 2 * 60,
-    'graph': 10 * 60,
+    # Fix G4: graph step 한도 600s → 2400s. SEMAPHORE_LIMIT=2 직렬화로 chunk 당
+    # ~3-5분 소요 (이전 burst 대비 안전). 10 chunks × 5분 = 50분 가능. retry 시
+    # graph_progress.json 으로 처리된 chunk 스킵 → 누적 시간만 반영.
+    'graph': 40 * 60,
     'agents': 10 * 60,
     'simulation': 30 * 60,
     'report': 20 * 60,
