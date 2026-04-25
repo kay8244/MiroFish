@@ -15,18 +15,18 @@
       <section class="hero-section">
         <div class="hero-left">
           <div class="tag-row">
-            <span class="orange-tag">Simple & Universal Collective Intelligence Engine</span>
+            <span class="orange-tag">심플하고 범용적인 집단지성 엔진</span>
             <span class="version-text">/ v0.1-preview</span>
           </div>
 
           <h1 class="main-title">
-            Upload any report<br>
-            <span class="gradient-text">Simulate the future instantly</span>
+            어떤 보고서든 업로드<br>
+            <span class="gradient-text">즉시 미래를 시뮬레이션</span>
           </h1>
 
           <div class="hero-desc">
             <p>
-              Even from a single paragraph, <span class="highlight-bold">MiroFish</span> can automatically generate a parallel world of up to <span class="highlight-orange">one million Agents</span> rooted in the reality seeds within it. Inject variables from a god's-eye view and search for the <span class="highlight-code">"local optimum"</span> amid complex group dynamics.
+              단 한 단락의 정보만으로도 <span class="highlight-bold">MiroFish</span>는 그 안의 씨드 정보에 기반해 최대 <span class="highlight-orange">100만 개의 에이전트</span>가 활동하는 병렬 세계를 자동으로 생성합니다. 전지적 시점으로 변수를 주입하고 복잡한 군집 역학 속에서 <span class="highlight-code">"국소 최적해"</span>를 탐색하세요.
             </p>
             <p class="slogan-text">
               Let the future play out among Agents. Let decisions win after a hundred battles.<span class="blinking-cursor">_</span>
@@ -53,64 +53,64 @@
         <!-- Left column: Status and steps -->
         <div class="left-panel">
           <div class="panel-header">
-            <span class="status-dot">■</span> System Status
+            <span class="status-dot">■</span> 시스템 상태
           </div>
 
-          <h2 class="section-title">Ready</h2>
+          <h2 class="section-title">준비 완료</h2>
           <p class="section-desc">
-            Prediction engine on standby. Upload one or more unstructured data files to initialize the simulation sequence.
+            예측 엔진 대기 중. 하나 이상의 비정형 데이터 파일을 업로드하여 시뮬레이션을 시작하세요.
           </p>
 
           <!-- Data metric cards -->
           <div class="metrics-row">
             <div class="metric-card">
-              <div class="metric-value">Low cost</div>
-              <div class="metric-label">~$5/run on average</div>
+              <div class="metric-value">저비용</div>
+              <div class="metric-label">평균 회당 ~$5</div>
             </div>
             <div class="metric-card">
-              <div class="metric-value">High scale</div>
-              <div class="metric-label">Up to 1M-agent simulations</div>
+              <div class="metric-value">대규모</div>
+              <div class="metric-label">최대 100만 에이전트 시뮬레이션</div>
             </div>
           </div>
 
           <!-- Workflow steps (new section) -->
           <div class="steps-container">
             <div class="steps-header">
-               <span class="diamond-icon">◇</span> Workflow Sequence
+               <span class="diamond-icon">◇</span> 워크플로우 시퀀스
             </div>
             <div class="workflow-list">
               <div class="workflow-item">
                 <span class="step-num">01</span>
                 <div class="step-info">
-                  <div class="step-title">Graph Build</div>
+                  <div class="step-title">그래프 구축</div>
                   <div class="step-desc">Reality seed extraction &amp; individual/group memory injection &amp; GraphRAG construction</div>
                 </div>
               </div>
               <div class="workflow-item">
                 <span class="step-num">02</span>
                 <div class="step-info">
-                  <div class="step-title">Environment Setup</div>
+                  <div class="step-title">환경 설정</div>
                   <div class="step-desc">Entity-relation extraction &amp; persona generation &amp; environment-config agent injects simulation parameters</div>
                 </div>
               </div>
               <div class="workflow-item">
                 <span class="step-num">03</span>
                 <div class="step-info">
-                  <div class="step-title">Run Simulation</div>
+                  <div class="step-title">시뮬레이션 실행</div>
                   <div class="step-desc">Dual-platform parallel simulation &amp; automatic prediction-requirement parsing &amp; dynamic temporal memory updates</div>
                 </div>
               </div>
               <div class="workflow-item">
                 <span class="step-num">04</span>
                 <div class="step-info">
-                  <div class="step-title">Report Generation</div>
+                  <div class="step-title">리포트 생성</div>
                   <div class="step-desc">ReportAgent uses a rich toolset to deeply interact with the post-simulation environment</div>
                 </div>
               </div>
               <div class="workflow-item">
                 <span class="step-num">05</span>
                 <div class="step-info">
-                  <div class="step-title">Deep Interaction</div>
+                  <div class="step-title">심층 상호작용</div>
                   <div class="step-desc">Chat with any individual in the simulated world &amp; chat with ReportAgent</div>
                 </div>
               </div>
@@ -124,8 +124,8 @@
             <!-- Upload area -->
             <div class="console-section">
               <div class="console-header">
-                <span class="console-label">01 / Reality Seeds</span>
-                <span class="console-meta">Supported formats: PDF, MD, TXT</span>
+                <span class="console-label">01 / 씨드 문서</span>
+                <span class="console-meta">지원 형식: PDF, MD, TXT</span>
               </div>
 
               <div
@@ -148,8 +148,8 @@
 
                 <div v-if="files.length === 0" class="upload-placeholder">
                   <div class="upload-icon">↑</div>
-                  <div class="upload-title">Drag and drop files to upload</div>
-                  <div class="upload-hint">or click to browse the file system</div>
+                  <div class="upload-title">파일을 드래그 앤 드롭하여 업로드</div>
+                  <div class="upload-hint">또는 클릭하여 파일 선택</div>
                 </div>
 
                 <div v-else class="file-list">
@@ -164,13 +164,13 @@
 
             <!-- Divider -->
             <div class="console-divider">
-              <span>Input Parameters</span>
+              <span>입력 파라미터</span>
             </div>
 
             <!-- Input area -->
             <div class="console-section">
               <div class="console-header">
-                <span class="console-label">>_ 02 / Simulation Prompt</span>
+                <span class="console-label">>_ 02 / 시뮬레이션 요청</span>
               </div>
               <div class="input-wrapper">
                 <textarea
@@ -180,7 +180,7 @@
                   rows="6"
                   :disabled="loading"
                 ></textarea>
-                <div class="model-badge">Engine: MiroFish-V1.0</div>
+                <div class="model-badge">엔진: MiroFish-V1.0</div>
               </div>
             </div>
 
@@ -191,8 +191,8 @@
                 @click="startSimulation"
                 :disabled="!canSubmit || loading"
               >
-                <span v-if="!loading">Launch Engine</span>
-                <span v-else>Initializing...</span>
+                <span v-if="!loading">엔진 시작</span>
+                <span v-else>초기화 중...</span>
                 <span class="btn-arrow">→</span>
               </button>
             </div>
@@ -306,46 +306,42 @@ const startSimulation = () => {
 </script>
 
 <style scoped>
-/* Global variables and resets */
-:root {
-  --black: #000000;
-  --white: #FFFFFF;
-  --orange: #FF4500;
-  --gray-light: #F5F5F5;
-  --gray-text: #666666;
-  --border: #E5E5E5;
-  /*
-    Use Space Grotesk as the primary heading font, JetBrains Mono for code/labels.
-    Ensure these Google Fonts are imported in index.html.
-  */
-  --font-mono: 'JetBrains Mono', monospace;
-  --font-sans: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
-  --font-cn: 'Noto Sans SC', system-ui, sans-serif;
-}
+/*
+ * Apple-inspired Light theme — Home.
+ * All colors/spacing reference global tokens from src/assets/styles/tokens.css.
+ * Monospace is preserved as an UI-label accent (Apple uses similar utility labels).
+ */
 
 .home-container {
   min-height: 100vh;
-  background: var(--white);
-  font-family: var(--font-sans);
-  color: var(--black);
+  background: var(--color-canvas);
+  font-family: var(--font-text);
+  color: var(--color-text);
 }
 
-/* Top navigation */
+/* Top navigation — light translucent bar with subtle bottom border */
 .navbar {
-  height: 60px;
-  background: var(--black);
-  color: var(--white);
+  height: 64px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  color: var(--color-text);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 40px;
+  padding: 0 var(--space-9);
+  border-bottom: 1px solid var(--color-border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .nav-brand {
-  font-family: var(--font-mono);
-  font-weight: 800;
-  letter-spacing: 1px;
-  font-size: 1.2rem;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-size: 1.05rem;
+  color: var(--color-text);
 }
 
 .nav-links {
@@ -354,134 +350,140 @@ const startSimulation = () => {
 }
 
 .github-link {
-  color: var(--white);
+  color: var(--color-text);
   text-decoration: none;
-  font-family: var(--font-mono);
-  font-size: 0.9rem;
+  font-size: var(--fs-control);
   font-weight: 500;
+  letter-spacing: -0.014em;
   display: flex;
   align-items: center;
-  gap: 8px;
-  transition: opacity 0.2s;
+  gap: 6px;
+  transition: color var(--duration-fast) var(--ease-standard);
 }
 
 .github-link:hover {
-  opacity: 0.8;
+  color: var(--color-accent);
 }
 
 .arrow {
-  font-family: sans-serif;
+  font-family: var(--font-text);
 }
 
 /* Main content area */
 .main-content {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 60px 40px;
+  padding: var(--space-11) var(--space-9);
 }
 
 /* Hero section */
 .hero-section {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 80px;
+  margin-bottom: var(--space-11);
   position: relative;
 }
 
 .hero-left {
   flex: 1;
-  padding-right: 60px;
+  padding-right: var(--space-11);
 }
 
 .tag-row {
   display: flex;
   align-items: center;
-  gap: 15px;
-  margin-bottom: 25px;
+  gap: var(--space-5);
+  margin-bottom: var(--space-7);
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: var(--fs-micro);
 }
 
 .orange-tag {
-  background: var(--orange);
-  color: var(--white);
+  background: var(--color-canvas-muted);
+  color: var(--color-text);
   padding: 4px 10px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  font-size: var(--fs-micro);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border-subtle);
+  font-family: var(--font-text);
 }
 
 .version-text {
-  color: #999;
+  color: var(--color-text-muted);
   font-weight: 500;
-  letter-spacing: 0.5px;
+  letter-spacing: 0;
 }
 
 .main-title {
+  font-family: var(--font-display);
   font-size: 4.5rem;
-  line-height: 1.2;
-  font-weight: 500;
-  margin: 0 0 40px 0;
-  letter-spacing: -2px;
-  color: var(--black);
+  line-height: 1.05;
+  font-weight: 600;
+  margin: 0 0 var(--space-9) 0;
+  letter-spacing: -0.025em;
+  color: var(--color-text);
 }
 
 .gradient-text {
-  background: linear-gradient(90deg, #000000 0%, #444444 100%);
+  background: linear-gradient(90deg, var(--color-text) 0%, var(--color-text-muted) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   display: inline-block;
 }
 
 .hero-desc {
-  font-size: 1.05rem;
-  line-height: 1.8;
-  color: var(--gray-text);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--color-text-muted);
   max-width: 640px;
-  margin-bottom: 50px;
+  margin-bottom: var(--space-10);
   font-weight: 400;
-  text-align: justify;
+  letter-spacing: -0.022em;
 }
 
 .hero-desc p {
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--space-6);
 }
 
 .highlight-bold {
-  color: var(--black);
-  font-weight: 700;
-}
-
-.highlight-orange {
-  color: var(--orange);
-  font-weight: 700;
-  font-family: var(--font-mono);
-}
-
-.highlight-code {
-  background: rgba(0, 0, 0, 0.05);
-  padding: 2px 6px;
-  border-radius: 2px;
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-  color: var(--black);
+  color: var(--color-text);
   font-weight: 600;
 }
 
+.highlight-orange {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+.highlight-code {
+  background: var(--color-canvas-muted);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--color-text);
+  font-weight: 500;
+  border: 1px solid var(--color-border-subtle);
+}
+
 .slogan-text {
-  font-size: 1.2rem;
-  font-weight: 520;
-  color: var(--black);
-  letter-spacing: 1px;
-  border-left: 3px solid var(--orange);
-  padding-left: 15px;
-  margin-top: 20px;
+  font-family: var(--font-display);
+  font-size: var(--fs-link-action);
+  font-weight: 500;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+  border-left: 3px solid var(--color-accent);
+  padding-left: var(--space-5);
+  margin-top: var(--space-7);
+  line-height: 1.4;
 }
 
 .blinking-cursor {
-  color: var(--orange);
+  color: var(--color-accent);
   animation: blink 1s step-end infinite;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 @keyframes blink {
@@ -492,7 +494,8 @@ const startSimulation = () => {
 .decoration-square {
   width: 16px;
   height: 16px;
-  background: var(--orange);
+  background: var(--color-accent);
+  border-radius: var(--radius-xs);
 }
 
 .hero-right {
@@ -511,34 +514,42 @@ const startSimulation = () => {
 }
 
 .hero-logo {
-  max-width: 500px; /* Adjust logo size */
+  max-width: 460px;
   width: 100%;
+  border-radius: var(--radius-2xl);
+  background: var(--color-canvas-muted);
+  padding: var(--space-7);
+  box-shadow: var(--shadow-2);
+  /* JPEG 마스코트를 Apple 결의 spotlight 카드로 감싸 — 흰 배경 위 떠보이게 */
 }
 
 .scroll-down-btn {
   width: 40px;
   height: 40px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border-subtle);
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: var(--orange);
-  font-size: 1.2rem;
-  transition: all 0.2s;
+  color: var(--color-accent);
+  font-size: 1.1rem;
+  border-radius: var(--radius-circle);
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              background var(--duration-fast) var(--ease-standard);
 }
 
 .scroll-down-btn:hover {
-  border-color: var(--orange);
+  border-color: var(--color-accent);
+  background: var(--color-canvas-muted);
 }
 
 /* Dashboard two-column layout */
 .dashboard-section {
   display: flex;
-  gap: 60px;
-  border-top: 1px solid var(--border);
-  padding-top: 60px;
+  gap: var(--space-11);
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-11);
   align-items: flex-start;
 }
 
@@ -555,94 +566,117 @@ const startSimulation = () => {
 
 .panel-header {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: #999;
+  font-size: var(--fs-micro);
+  color: var(--color-text-muted);
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-7);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .status-dot {
-  color: var(--orange);
-  font-size: 0.8rem;
+  color: var(--color-accent);
+  font-size: 0.7rem;
 }
 
 .section-title {
-  font-size: 2rem;
-  font-weight: 520;
-  margin: 0 0 15px 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-product);
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  margin: 0 0 var(--space-5) 0;
+  color: var(--color-text);
 }
 
 .section-desc {
-  color: var(--gray-text);
-  margin-bottom: 25px;
-  line-height: 1.6;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-8);
+  line-height: 1.55;
+  font-size: var(--fs-body);
+  letter-spacing: -0.022em;
 }
 
 .metrics-row {
   display: flex;
-  gap: 20px;
-  margin-bottom: 15px;
+  gap: var(--space-7);
+  margin-bottom: var(--space-5);
 }
 
 .metric-card {
-  border: 1px solid var(--border);
-  padding: 20px 30px;
+  border: 1px solid var(--color-border-subtle);
+  padding: var(--space-7) var(--space-9);
   min-width: 150px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.metric-card:hover {
+  border-color: var(--color-border-strong);
 }
 
 .metric-value {
-  font-family: var(--font-mono);
-  font-size: 1.8rem;
-  font-weight: 520;
-  margin-bottom: 5px;
+  font-family: var(--font-display);
+  font-size: var(--fs-utility);
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  margin-bottom: var(--space-2);
+  color: var(--color-text);
 }
 
 .metric-label {
-  font-size: 0.85rem;
-  color: #999;
+  font-size: var(--fs-control);
+  color: var(--color-text-muted);
+  letter-spacing: -0.014em;
 }
 
 /* Workflow steps section */
 .steps-container {
-  border: 1px solid var(--border);
-  padding: 30px;
+  border: 1px solid var(--color-border-subtle);
+  padding: var(--space-9);
   position: relative;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .steps-header {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: #999;
-  margin-bottom: 25px;
+  font-size: var(--fs-micro);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-8);
   display: flex;
   align-items: center;
   gap: 8px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .diamond-icon {
-  font-size: 1.2rem;
+  font-size: 1rem;
   line-height: 1;
+  color: var(--color-accent);
 }
 
 .workflow-list {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--space-7);
 }
 
 .workflow-item {
   display: flex;
   align-items: flex-start;
-  gap: 20px;
+  gap: var(--space-7);
 }
 
 .step-num {
   font-family: var(--font-mono);
-  font-weight: 700;
-  color: var(--black);
-  opacity: 0.3;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: -0.012em;
 }
 
 .step-info {
@@ -650,14 +684,18 @@ const startSimulation = () => {
 }
 
 .step-title {
-  font-weight: 520;
-  font-size: 1rem;
+  font-weight: 600;
+  font-size: var(--fs-body);
   margin-bottom: 4px;
+  color: var(--color-text);
+  letter-spacing: -0.022em;
 }
 
 .step-desc {
-  font-size: 0.85rem;
-  color: var(--gray-text);
+  font-size: var(--fs-control);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  letter-spacing: -0.014em;
 }
 
 /* Right panel — interactive console */
@@ -666,12 +704,14 @@ const startSimulation = () => {
 }
 
 .console-box {
-  border: 1px solid #CCC; /* Outer solid border */
-  padding: 8px; /* Inner padding creates a double-border feel */
+  border: 1px solid var(--color-border-subtle);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
 }
 
 .console-section {
-  padding: 20px;
+  padding: var(--space-7);
 }
 
 .console-section.btn-section {
@@ -681,22 +721,26 @@ const startSimulation = () => {
 .console-header {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 15px;
+  margin-bottom: var(--space-5);
   font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: #666;
+  font-size: var(--fs-micro);
+  color: var(--color-text-muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .upload-zone {
-  border: 1px dashed #CCC;
+  border: 1px dashed var(--color-border-subtle);
   height: 200px;
   overflow-y: auto;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.3s;
-  background: #FAFAFA;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard);
+  background: var(--color-canvas-muted);
+  border-radius: var(--radius-md);
 }
 
 .upload-zone.has-files {
@@ -704,8 +748,8 @@ const startSimulation = () => {
 }
 
 .upload-zone:hover {
-  background: #F0F0F0;
-  border-color: #999;
+  background: var(--color-surface);
+  border-color: var(--color-accent);
 }
 
 .upload-placeholder {
@@ -715,29 +759,33 @@ const startSimulation = () => {
 .upload-icon {
   width: 40px;
   height: 40px;
-  border: 1px solid #DDD;
+  border: 1px solid var(--color-border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 15px;
-  color: #999;
+  margin: 0 auto var(--space-5);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-circle);
+  font-size: 1.1rem;
 }
 
 .upload-title {
   font-weight: 500;
-  font-size: 0.9rem;
-  margin-bottom: 5px;
+  font-size: var(--fs-control);
+  margin-bottom: 4px;
+  color: var(--color-text);
+  letter-spacing: -0.014em;
 }
 
 .upload-hint {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: #999;
+  font-size: var(--fs-micro);
+  color: var(--color-text-muted);
+  letter-spacing: -0.012em;
 }
 
 .file-list {
   width: 100%;
-  padding: 15px;
+  padding: var(--space-5);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -746,30 +794,37 @@ const startSimulation = () => {
 .file-item {
   display: flex;
   align-items: center;
-  background: var(--white);
+  background: var(--color-surface);
   padding: 8px 12px;
-  border: 1px solid #EEE;
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
+  border: 1px solid var(--color-border-subtle);
+  font-size: var(--fs-control);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
 }
 
 .file-name {
   flex: 1;
   margin: 0 10px;
+  letter-spacing: -0.014em;
 }
 
 .remove-btn {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 1.2rem;
-  color: #999;
+  font-size: 1.1rem;
+  color: var(--color-text-muted);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.remove-btn:hover {
+  color: var(--color-error);
 }
 
 .console-divider {
   display: flex;
   align-items: center;
-  margin: 10px 0;
+  margin: var(--space-3) 0;
 }
 
 .console-divider::before,
@@ -777,94 +832,91 @@ const startSimulation = () => {
   content: '';
   flex: 1;
   height: 1px;
-  background: #EEE;
+  background: var(--color-border-subtle);
 }
 
 .console-divider span {
-  padding: 0 15px;
+  padding: 0 var(--space-5);
   font-family: var(--font-mono);
-  font-size: 0.7rem;
-  color: #BBB;
-  letter-spacing: 1px;
+  font-size: var(--fs-legal);
+  color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .input-wrapper {
   position: relative;
-  border: 1px solid #DDD;
-  background: #FAFAFA;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-canvas-muted);
+  border-radius: var(--radius-md);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.input-wrapper:focus-within {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.18);
 }
 
 .code-input {
   width: 100%;
   border: none;
   background: transparent;
-  padding: 20px;
+  padding: var(--space-7);
   font-family: var(--font-mono);
-  font-size: 0.9rem;
+  font-size: var(--fs-control);
   line-height: 1.6;
   resize: vertical;
   outline: none;
   min-height: 150px;
+  color: var(--color-text);
+  border-radius: var(--radius-md);
 }
 
 .model-badge {
   position: absolute;
   bottom: 10px;
-  right: 15px;
+  right: var(--space-5);
   font-family: var(--font-mono);
-  font-size: 0.7rem;
-  color: #AAA;
+  font-size: var(--fs-legal);
+  color: var(--color-text-muted);
 }
 
 .start-engine-btn {
   width: 100%;
-  background: var(--black);
-  color: var(--white);
+  background: var(--color-accent);
+  color: var(--color-accent-on);
   border: none;
-  padding: 20px;
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 1.1rem;
+  padding: var(--space-5) var(--space-7);
+  font-family: var(--font-text);
+  font-weight: 600;
+  font-size: var(--fs-body);
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  gap: var(--space-3);
   cursor: pointer;
-  transition: all 0.3s ease;
-  letter-spacing: 1px;
+  transition: background var(--duration-fast) var(--ease-standard),
+              transform var(--duration-fast) var(--ease-standard);
+  letter-spacing: -0.014em;
   position: relative;
   overflow: hidden;
-}
-
-/* Clickable state (not disabled) */
-.start-engine-btn:not(:disabled) {
-  background: var(--black);
-  border: 1px solid var(--black);
-  animation: pulse-border 2s infinite;
+  border-radius: var(--radius-pill);
 }
 
 .start-engine-btn:hover:not(:disabled) {
-  background: var(--orange);
-  border-color: var(--orange);
-  transform: translateY(-2px);
+  background: var(--color-accent-hover);
 }
 
 .start-engine-btn:active:not(:disabled) {
-  transform: translateY(0);
+  transform: scale(0.99);
+  background: var(--color-accent-pressed);
 }
 
 .start-engine-btn:disabled {
-  background: #E5E5E5;
-  color: #999;
+  background: var(--color-canvas-muted);
+  color: var(--color-text-muted);
   cursor: not-allowed;
-  transform: none;
-  border: 1px solid #E5E5E5;
-}
-
-/* Subtle border-pulse animation to draw attention */
-@keyframes pulse-border {
-  0% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.2); }
-  70% { box-shadow: 0 0 0 6px rgba(0, 0, 0, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+  border: 1px solid var(--color-border-subtle);
 }
 
 /* Responsive layout */

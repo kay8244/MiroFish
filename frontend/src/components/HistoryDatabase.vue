@@ -13,7 +13,7 @@
     <!-- Title area -->
     <div class="section-header">
       <div class="section-line"></div>
-      <span class="section-title">Simulation History</span>
+      <span class="section-title">시뮬레이션 히스토리</span>
       <div class="section-line"></div>
     </div>
 
@@ -36,16 +36,16 @@
             <span 
               class="status-icon" 
               :class="{ available: project.project_id, unavailable: !project.project_id }"
-              title="Knowledge Graph Build"
+              title="지식 그래프 구축"
             >◇</span>
-            <span 
-              class="status-icon available" 
-              title="Environment Setup"
+            <span
+              class="status-icon available"
+              title="환경 설정"
             >◈</span>
-            <span 
-              class="status-icon" 
+            <span
+              class="status-icon"
               :class="{ available: project.report_id, unavailable: !project.report_id }"
-              title="Analysis Report"
+              title="분석 리포트"
             >◆</span>
           </div>
         </div>
@@ -67,13 +67,13 @@
             </div>
             <!-- Show hint if there are more files -->
             <div v-if="project.files.length > 3" class="files-more">
-              +{{ project.files.length - 3 }} files
+              +{{ project.files.length - 3 }}개 파일
             </div>
           </div>
           <!-- Placeholder when there are no files -->
           <div class="files-empty" v-else>
             <span class="empty-file-icon">◇</span>
-            <span class="empty-file-text">No files</span>
+            <span class="empty-file-text">파일 없음</span>
           </div>
         </div>
 
@@ -102,7 +102,7 @@
     <!-- Loading state -->
     <div v-if="loading" class="loading-state">
       <span class="loading-spinner"></span>
-      <span class="loading-text">Loading...</span>
+      <span class="loading-text">불러오는 중...</span>
     </div>
 
     <!-- Simulation playback detail modal -->
@@ -126,27 +126,27 @@
             <div class="modal-body">
               <!-- Simulation requirement -->
               <div class="modal-section">
-                <div class="modal-label">Simulation Requirement</div>
-                <div class="modal-requirement">{{ selectedProject.simulation_requirement || 'None' }}</div>
+                <div class="modal-label">시뮬레이션 요청</div>
+                <div class="modal-requirement">{{ selectedProject.simulation_requirement || '없음' }}</div>
               </div>
 
               <!-- File list -->
               <div class="modal-section">
-                <div class="modal-label">Associated Files</div>
+                <div class="modal-label">연결된 파일</div>
                 <div class="modal-files" v-if="selectedProject.files && selectedProject.files.length > 0">
                   <div v-for="(file, index) in selectedProject.files" :key="index" class="modal-file-item">
                     <span class="file-tag" :class="getFileType(file.filename)">{{ getFileTypeLabel(file.filename) }}</span>
                     <span class="modal-file-name">{{ file.filename }}</span>
                   </div>
                 </div>
-                <div class="modal-empty" v-else>No associated files</div>
+                <div class="modal-empty" v-else>연결된 파일 없음</div>
               </div>
             </div>
 
             <!-- Simulation Playback divider -->
             <div class="modal-divider">
               <span class="divider-line"></span>
-              <span class="divider-text">Simulation Playback</span>
+              <span class="divider-text">시뮬레이션 재생</span>
               <span class="divider-line"></span>
             </div>
 
@@ -159,7 +159,7 @@
               >
                 <span class="btn-step">Step1</span>
                 <span class="btn-icon">◇</span>
-                <span class="btn-text">Knowledge Graph Build</span>
+                <span class="btn-text">지식 그래프 구축</span>
               </button>
               <button 
                 class="modal-btn btn-simulation" 
@@ -167,7 +167,7 @@
               >
                 <span class="btn-step">Step2</span>
                 <span class="btn-icon">◈</span>
-                <span class="btn-text">Environment Setup</span>
+                <span class="btn-text">환경 설정</span>
               </button>
               <button 
                 class="modal-btn btn-report" 
@@ -176,12 +176,12 @@
               >
                 <span class="btn-step">Step4</span>
                 <span class="btn-icon">◆</span>
-                <span class="btn-text">Analysis Report</span>
+                <span class="btn-text">분석 리포트</span>
               </button>
             </div>
             <!-- Non-playback hint -->
             <div class="modal-playback-hint">
-              <span class="hint-text">Step3 "Start Simulation" and Step5 "Deep Interaction" must be launched while running; historical playback is not supported</span>
+              <span class="hint-text">Step3(시뮬레이션 시작)과 Step5(심층 상호작용)는 실행 중에만 가능합니다. 히스토리 재생은 지원되지 않습니다</span>
             </div>
           </div>
         </div>
@@ -337,7 +337,7 @@ const truncateText = (text, maxLength) => {
 
 // Generate title from simulation requirement (first 20 chars)
 const getSimulationTitle = (requirement) => {
-  if (!requirement) return 'Unnamed Simulation'
+  if (!requirement) return '제목 없는 시뮬레이션'
   const title = requirement.slice(0, 20)
   return requirement.length > 20 ? title + '...' : title
 }
@@ -353,8 +353,8 @@ const formatSimulationId = (simulationId) => {
 const formatRounds = (simulation) => {
   const current = simulation.current_round || 0
   const total = simulation.total_rounds || 0
-  if (total === 0) return 'Not Started'
-  return `${current}/${total} Rounds`
+  if (total === 0) return '시작 전'
+  return `${current}/${total} 라운드`
 }
 
 // Get file type (for styling)
@@ -639,15 +639,15 @@ onUnmounted(() => {
 .section-line {
   flex: 1;
   height: 1px;
-  background: linear-gradient(90deg, transparent, #E5E7EB, transparent);
+  background: linear-gradient(90deg, transparent, var(--color-border-subtle), transparent);
   max-width: 300px;
 }
 
 .section-title {
-  font-size: 0.8rem;
+  font-size: var(--fs-micro);
   font-weight: 500;
-  color: #9CA3AF;
-  letter-spacing: 3px;
+  color: var(--color-text-muted);
+  letter-spacing: 0.18em;
   text-transform: uppercase;
 }
 
@@ -666,18 +666,21 @@ onUnmounted(() => {
 .project-card {
   position: absolute;
   width: 280px;
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 0;
-  padding: 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
   cursor: pointer;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 700ms cubic-bezier(0.23, 1, 0.32, 1), opacity 700ms cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: var(--shadow-1);
+  transition: box-shadow var(--duration-base) var(--ease-standard),
+              border-color var(--duration-base) var(--ease-standard),
+              transform 700ms cubic-bezier(0.23, 1, 0.32, 1),
+              opacity 700ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .project-card:hover {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  border-color: rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-3);
+  border-color: var(--color-border-strong);
   z-index: 1000 !important;
 }
 
@@ -894,7 +897,7 @@ onUnmounted(() => {
 }
 
 .project-card:hover .card-title {
-  color: #2563EB;
+  color: var(--color-accent);
 }
 
 /* Card description */

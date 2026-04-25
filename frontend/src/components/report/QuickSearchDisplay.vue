@@ -3,11 +3,11 @@
     <!-- Header Section -->
     <div class="quicksearch-header">
       <div class="header-main">
-        <div class="header-title">Quick Search</div>
+        <div class="header-title">빠른 검색</div>
         <div class="header-stats">
           <span class="stat-item">
             <span class="stat-value">{{ result.count || result.facts.length }}</span>
-            <span class="stat-label">Results</span>
+            <span class="stat-label">결과</span>
           </span>
           <template v-if="resultLength">
             <span class="stat-divider">&middot;</span>
@@ -39,7 +39,7 @@
       <!-- Facts -->
       <div v-if="!showTabs || activeTab === 'facts'" class="facts-panel">
         <div v-if="!showTabs" class="panel-header">
-          <span class="panel-title">Search Results</span>
+          <span class="panel-title">검색 결과</span>
           <span class="panel-count">Total: {{ result.facts.length }}</span>
         </div>
         <template v-if="result.facts.length > 0">
@@ -50,7 +50,7 @@
             </div>
           </div>
         </template>
-        <div v-else class="empty-state">No results found</div>
+        <div v-else class="empty-state">검색 결과가 없습니다</div>
         <button v-if="result.facts.length > INITIAL_SHOW_COUNT" class="expand-btn" @click="expandedFacts = !expandedFacts">
           {{ expandedFacts ? 'Collapse \u25B2' : `Show All ${result.facts.length} \u25BC` }}
         </button>
@@ -59,7 +59,7 @@
       <!-- Edges Tab -->
       <div v-if="activeTab === 'edges' && hasEdges" class="edges-panel">
         <div class="panel-header">
-          <span class="panel-title">Related Relations</span>
+          <span class="panel-title">관련 관계</span>
           <span class="panel-count">Total: {{ result.edges.length }}</span>
         </div>
         <div class="edges-list">
@@ -78,7 +78,7 @@
       <!-- Nodes Tab -->
       <div v-if="activeTab === 'nodes' && hasNodes" class="nodes-panel">
         <div class="panel-header">
-          <span class="panel-title">Related Nodes</span>
+          <span class="panel-title">관련 노드</span>
           <span class="panel-count">Total: {{ result.nodes.length }}</span>
         </div>
         <div class="nodes-grid">

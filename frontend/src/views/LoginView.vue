@@ -75,80 +75,113 @@ async function onSubmit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0f1115;
-  color: #e5e7eb;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  padding: var(--space-7);
+  background: var(--color-canvas-muted);
+  color: var(--color-text);
 }
+
 .login-card {
-  width: 360px;
-  padding: 40px 32px;
-  background: #1a1d24;
-  border: 1px solid #2a2f3a;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 380px;
+  padding: var(--space-10) var(--space-9);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
 }
+
 .title {
-  margin: 0 0 4px;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-family: var(--font-display);
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-utility);
+  font-weight: 600;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  color: var(--color-text);
 }
+
 .subtitle {
-  margin: 0 0 28px;
-  font-size: 14px;
-  color: #9ca3af;
+  margin: 0 0 var(--space-9);
+  font-size: var(--fs-control);
+  color: var(--color-text-muted);
+  letter-spacing: -0.014em;
 }
+
 .field {
   display: block;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-6);
 }
+
 .field span {
   display: block;
-  font-size: 13px;
-  margin-bottom: 6px;
-  color: #d1d5db;
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  margin-bottom: var(--space-3);
+  color: var(--color-text-muted);
+  letter-spacing: -0.012em;
 }
+
 .field input {
   width: 100%;
-  padding: 10px 12px;
-  background: #0f1115;
-  border: 1px solid #2a2f3a;
-  border-radius: 6px;
-  color: #e5e7eb;
-  font-size: 14px;
-  box-sizing: border-box;
+  padding: var(--space-5) var(--space-5);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--fs-body);
+  letter-spacing: -0.022em;
   outline: none;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
 }
+
+.field input:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+}
+
 .field input:focus {
-  border-color: #3b82f6;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.18);
 }
+
 .error {
-  margin: 8px 0 14px;
-  padding: 10px 12px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
-  border-radius: 6px;
-  font-size: 13px;
+  margin: var(--space-3) 0 var(--space-6);
+  padding: var(--space-5) var(--space-5);
+  background: var(--color-error-bg);
+  border: 1px solid rgba(211, 47, 47, 0.22);
+  color: var(--color-error);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-control);
 }
+
 .btn {
   width: 100%;
-  padding: 11px;
-  margin-top: 8px;
-  background: #3b82f6;
+  padding: var(--space-5);
+  margin-top: var(--space-3);
+  background: var(--color-accent);
   border: none;
-  border-radius: 6px;
-  color: white;
-  font-size: 14px;
+  border-radius: var(--radius-sm);
+  color: var(--color-accent-on);
+  font-size: var(--fs-control);
   font-weight: 600;
+  letter-spacing: -0.014em;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background var(--duration-fast) var(--ease-standard),
+              transform var(--duration-fast) var(--ease-standard);
 }
+
 .btn:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--color-accent-hover);
 }
+
+.btn:active:not(:disabled) {
+  transform: scale(0.99);
+  background: var(--color-accent-pressed);
+}
+
 .btn:disabled {
-  background: #374151;
+  background: var(--color-border-subtle);
+  color: var(--color-text-muted);
   cursor: not-allowed;
 }
 </style>

@@ -7,7 +7,7 @@
       <!-- Center step indicator -->
       <div class="nav-center">
         <div class="step-badge">STEP 01</div>
-        <div class="step-name">Knowledge Graph Build</div>
+        <div class="step-name">지식 그래프 구축</div>
       </div>
 
       <div class="nav-status">
@@ -115,7 +115,7 @@
                   <span class="edge-target">{{ selectedItem.data.target_name || selectedItem.data.target_node_name }}</span>
                 </div>
                 
-                <div class="detail-subtitle">Relationship</div>
+                <div class="detail-subtitle">관계</div>
                 
                 <div class="detail-row">
                   <span class="detail-label">UUID:</span>
@@ -189,8 +189,8 @@
                 <line x1="50" y1="72" x2="74" y2="66" stroke="#000" stroke-width="1"/>
               </svg>
             </div>
-            <p class="waiting-text">Waiting for ontology generation</p>
-            <p class="waiting-hint">Graph construction will start automatically after generation completes</p>
+            <p class="waiting-text">온톨로지 생성 대기 중</p>
+            <p class="waiting-hint">생성이 완료되면 그래프 구축이 자동으로 시작됩니다</p>
           </div>
           
           <!-- Building but no data yet -->
@@ -200,7 +200,7 @@
               <div class="loading-ring"></div>
               <div class="loading-ring"></div>
             </div>
-            <p class="waiting-text">Building Knowledge Graph</p>
+            <p class="waiting-text">지식 그래프 구축 중</p>
             <p class="waiting-hint">Data will appear shortly...</p>
           </div>
           
@@ -225,7 +225,7 @@
       <div class="right-panel" :class="{ 'hidden': isFullScreen }">
         <div class="panel-header dark-header">
           <span class="header-icon">▣</span>
-          <span class="header-title">Build Pipeline</span>
+          <span class="header-title">구축 파이프라인</span>
         </div>
 
         <div class="process-content">
@@ -234,7 +234,7 @@
             <div class="phase-header">
               <span class="phase-num">01</span>
               <div class="phase-info">
-                <div class="phase-title">Ontology Generation</div>
+                <div class="phase-title">온톨로지 생성</div>
                 <div class="phase-api">/api/graph/ontology/generate</div>
               </div>
               <span class="phase-status" :class="getPhaseStatusClass(0)">
@@ -244,7 +244,7 @@
             
             <div class="phase-detail">
               <div class="detail-section">
-                <div class="detail-label">API Description</div>
+                <div class="detail-label">API 설명</div>
                 <div class="detail-content">
                   After uploading documents, LLM analyzes the content and auto-generates an ontology structure (entity types + relation types) suited for opinion simulation
                 </div>
@@ -252,7 +252,7 @@
               
               <!-- Ontology generation progress -->
               <div class="detail-section" v-if="ontologyProgress && currentPhase === 0">
-                <div class="detail-label">Generation Progress</div>
+                <div class="detail-label">생성 진행률</div>
                 <div class="ontology-progress">
                   <div class="progress-spinner"></div>
                   <span class="progress-text">{{ ontologyProgress.message }}</span>
@@ -305,7 +305,7 @@
             <div class="phase-header">
               <span class="phase-num">02</span>
               <div class="phase-info">
-                <div class="phase-title">Knowledge Graph Build</div>
+                <div class="phase-title">지식 그래프 구축</div>
                 <div class="phase-api">/api/graph/build</div>
               </div>
               <span class="phase-status" :class="getPhaseStatusClass(1)">
@@ -315,7 +315,7 @@
             
             <div class="phase-detail">
               <div class="detail-section">
-                <div class="detail-label">API Description</div>
+                <div class="detail-label">API 설명</div>
                 <div class="detail-content">
                   Based on the generated ontology, documents are chunked and processed via the Zep API to build the knowledge graph, extracting entities and relations
                 </div>
@@ -328,7 +328,7 @@
               
               <!-- Build Progress -->
               <div class="detail-section" v-if="buildProgress && currentPhase >= 1">
-                <div class="detail-label">Build Progress</div>
+                <div class="detail-label">구축 진행률</div>
                 <div class="progress-bar">
                   <div class="progress-fill" :style="{ width: buildProgress.progress + '%' }"></div>
                 </div>
@@ -339,19 +339,19 @@
               </div>
               
               <div class="detail-section" v-if="graphData">
-                <div class="detail-label">Build Results</div>
+                <div class="detail-label">구축 결과</div>
                 <div class="build-result">
                   <div class="result-item">
                     <span class="result-value">{{ graphData.node_count }}</span>
-                    <span class="result-label">Entity Nodes</span>
+                    <span class="result-label">엔티티 노드</span>
                   </div>
                   <div class="result-item">
                     <span class="result-value">{{ graphData.edge_count }}</span>
-                    <span class="result-label">Relation Edges</span>
+                    <span class="result-label">관계 엣지</span>
                   </div>
                   <div class="result-item">
                     <span class="result-value">{{ entityTypes.length }}</span>
-                    <span class="result-label">Entity Types</span>
+                    <span class="result-label">엔티티 타입</span>
                   </div>
                 </div>
               </div>
@@ -363,8 +363,8 @@
             <div class="phase-header">
               <span class="phase-num">03</span>
               <div class="phase-info">
-                <div class="phase-title">Build Complete</div>
-                <div class="phase-api">Ready to proceed to next step</div>
+                <div class="phase-title">구축 완료</div>
+                <div class="phase-api">다음 단계로 진행 가능</div>
               </div>
               <span class="phase-status" :class="getPhaseStatusClass(2)">
                 {{ getPhaseStatusText(2) }}
@@ -385,23 +385,23 @@
         <div class="project-panel">
           <div class="project-header">
             <span class="project-icon">◇</span>
-            <span class="project-title">Project Info</span>
+            <span class="project-title">프로젝트 정보</span>
           </div>
           <div class="project-details" v-if="projectData">
             <div class="project-item">
-              <span class="item-label">Project Name</span>
+              <span class="item-label">프로젝트 이름</span>
               <span class="item-value">{{ projectData.name }}</span>
             </div>
             <div class="project-item">
-              <span class="item-label">Project ID</span>
+              <span class="item-label">프로젝트 ID</span>
               <span class="item-value code">{{ projectData.project_id }}</span>
             </div>
             <div class="project-item" v-if="projectData.graph_id">
-              <span class="item-label">Graph ID</span>
+              <span class="item-label">그래프 ID</span>
               <span class="item-value code">{{ projectData.graph_id }}</span>
             </div>
             <div class="project-item">
-              <span class="item-label">Simulation Requirement</span>
+              <span class="item-label">시뮬레이션 요청</span>
               <span class="item-value">{{ projectData.simulation_requirement || '-' }}</span>
             </div>
           </div>

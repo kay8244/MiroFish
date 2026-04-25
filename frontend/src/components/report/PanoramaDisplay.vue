@@ -3,16 +3,16 @@
     <!-- Header Section -->
     <div class="panorama-header">
       <div class="header-main">
-        <div class="header-title">Panorama Search</div>
+        <div class="header-title">파노라마 검색</div>
         <div class="header-stats">
           <span class="stat-item">
             <span class="stat-value">{{ result.stats.nodes }}</span>
-            <span class="stat-label">Nodes</span>
+            <span class="stat-label">노드</span>
           </span>
           <span class="stat-divider">/</span>
           <span class="stat-item">
             <span class="stat-value">{{ result.stats.edges }}</span>
-            <span class="stat-label">Edges</span>
+            <span class="stat-label">엣지</span>
           </span>
           <template v-if="resultLength">
             <span class="stat-divider">&middot;</span>
@@ -41,7 +41,7 @@
       <!-- Active Facts Tab -->
       <div v-if="activeTab === 'active'" class="facts-panel active-facts">
         <div class="panel-header">
-          <span class="panel-title">Active Memories</span>
+          <span class="panel-title">활성 메모리</span>
           <span class="panel-count">Total: {{ result.activeFacts.length }}</span>
         </div>
         <template v-if="result.activeFacts.length > 0">
@@ -52,7 +52,7 @@
             </div>
           </div>
         </template>
-        <div v-else class="empty-state">No active memories available</div>
+        <div v-else class="empty-state">활성 메모리가 없습니다</div>
         <button v-if="result.activeFacts.length > INITIAL_SHOW_COUNT" class="expand-btn" @click="expandedActive = !expandedActive">
           {{ expandedActive ? 'Collapse \u25B2' : `Show All ${result.activeFacts.length} \u25BC` }}
         </button>
@@ -61,7 +61,7 @@
       <!-- Historical Facts Tab -->
       <div v-if="activeTab === 'historical'" class="facts-panel historical-facts">
         <div class="panel-header">
-          <span class="panel-title">Historical Memories</span>
+          <span class="panel-title">과거 메모리</span>
           <span class="panel-count">Total: {{ result.historicalFacts.length }}</span>
         </div>
         <template v-if="result.historicalFacts.length > 0">
@@ -78,7 +78,7 @@
             </div>
           </div>
         </template>
-        <div v-else class="empty-state">No historical memories available</div>
+        <div v-else class="empty-state">과거 메모리가 없습니다</div>
         <button v-if="result.historicalFacts.length > INITIAL_SHOW_COUNT" class="expand-btn" @click="expandedHistorical = !expandedHistorical">
           {{ expandedHistorical ? 'Collapse \u25B2' : `Show All ${result.historicalFacts.length} \u25BC` }}
         </button>
@@ -87,7 +87,7 @@
       <!-- Entities Tab -->
       <div v-if="activeTab === 'entities'" class="entities-panel">
         <div class="panel-header">
-          <span class="panel-title">Involved Entities</span>
+          <span class="panel-title">관련 엔티티</span>
           <span class="panel-count">Total: {{ result.entities.length }}</span>
         </div>
         <template v-if="result.entities.length > 0">
@@ -98,7 +98,7 @@
             </div>
           </div>
         </template>
-        <div v-else class="empty-state">No entities available</div>
+        <div v-else class="empty-state">엔티티가 없습니다</div>
         <button v-if="result.entities.length > 8" class="expand-btn" @click="expandedEntities = !expandedEntities">
           {{ expandedEntities ? 'Collapse \u25B2' : `Show All ${result.entities.length} \u25BC` }}
         </button>

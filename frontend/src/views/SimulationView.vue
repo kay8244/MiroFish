@@ -23,7 +23,7 @@
       <div class="header-right">
         <div class="workflow-step">
           <span class="step-num">Step 2/5</span>
-          <span class="step-name">Env Setup</span>
+          <span class="step-name">환경 설정</span>
         </div>
         <div class="step-divider"></div>
         <span class="status-indicator" :class="statusClass">

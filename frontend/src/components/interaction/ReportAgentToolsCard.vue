@@ -21,7 +21,7 @@
             </svg>
           </div>
           <div class="tool-content">
-            <div class="tool-name">InsightForge Deep Attribution</div>
+            <div class="tool-name">인사이트포지 심층 분석</div>
             <div class="tool-desc">Aligns real-world seed data with simulation state. Uses Global/Local Memory mechanisms to deliver cross-temporal deep attribution analysis.</div>
           </div>
         </div>
@@ -33,7 +33,7 @@
             </svg>
           </div>
           <div class="tool-content">
-            <div class="tool-name">PanoramaSearch Panoramic Tracking</div>
+            <div class="tool-name">파노라마서치 전역 추적</div>
             <div class="tool-desc">Graph-based breadth-first traversal algorithm. Reconstructs event propagation paths and captures the full topology of information flow.</div>
           </div>
         </div>
@@ -44,7 +44,7 @@
             </svg>
           </div>
           <div class="tool-content">
-            <div class="tool-name">QuickSearch Fast Retrieval</div>
+            <div class="tool-name">퀵서치 빠른 조회</div>
             <div class="tool-desc">GraphRAG-based instant query interface with optimized indexing. Used for rapid extraction of specific node attributes and discrete facts.</div>
           </div>
         </div>
@@ -57,7 +57,7 @@
             </svg>
           </div>
           <div class="tool-content">
-            <div class="tool-name">InterviewSubAgent Virtual Interview</div>
+            <div class="tool-name">인터뷰서브에이전트 가상 인터뷰</div>
             <div class="tool-desc">Autonomous interviewer that conducts parallel multi-turn conversations with individuals in the simulated world, collecting unstructured opinion data and psychological states.</div>
           </div>
         </div>

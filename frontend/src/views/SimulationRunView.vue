@@ -23,7 +23,7 @@
       <div class="header-right">
         <div class="workflow-step">
           <span class="step-num">Step 3/5</span>
-          <span class="step-name">Run Simulation</span>
+          <span class="step-name">시뮬레이션 실행</span>
         </div>
         <div class="step-divider"></div>
         <span class="status-indicator" :class="statusClass">

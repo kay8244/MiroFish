@@ -5,8 +5,8 @@
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
       </svg>
       <div class="action-bar-text">
-        <span class="action-bar-title">Interactive Tools</span>
-        <span class="action-bar-subtitle mono">{{ profiles.length }} agents available</span>
+        <span class="action-bar-title">인터랙션 도구</span>
+        <span class="action-bar-subtitle mono">에이전트 {{ profiles.length }}명 가능</span>
       </div>
     </div>
     <div class="action-bar-tabs">
@@ -18,7 +18,7 @@
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
         </svg>
-        <span>Chat with Report Agent</span>
+        <span>리포트 에이전트와 대화</span>
       </button>
       <div class="agent-dropdown" v-if="profiles.length > 0">
         <button
@@ -36,7 +36,7 @@
           </svg>
         </button>
         <div v-if="showAgentDropdown" class="dropdown-menu">
-          <div class="dropdown-header">Select conversation target</div>
+          <div class="dropdown-header">대화 대상 선택</div>
           <div
             v-for="(agent, idx) in profiles"
             :key="idx"
@@ -61,7 +61,7 @@
           <path d="M9 11l3 3L22 4"></path>
           <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
         </svg>
-        <span>Send survey to the world</span>
+        <span>세계에 설문 전송</span>
       </button>
       <button
         class="tab-pill scenario-pill"
@@ -73,7 +73,7 @@
           <circle cx="12" cy="12" r="6"></circle>
           <circle cx="12" cy="12" r="2"></circle>
         </svg>
-        <span>Run new scenario</span>
+        <span>새 시나리오 실행</span>
       </button>
     </div>
   </div>

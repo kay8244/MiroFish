@@ -6,11 +6,11 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">01</span>
-            <span class="step-title">Simulation Instance Initialization</span>
+            <span class="step-title">시뮬레이션 인스턴스 초기화</span>
           </div>
           <div class="step-status">
-            <span v-if="phase > 0" class="badge success">Completed</span>
-            <span v-else class="badge processing">Initializing</span>
+            <span v-if="phase > 0" class="badge success">완료</span>
+            <span v-else class="badge processing">초기화 중</span>
           </div>
         </div>
         
@@ -22,19 +22,19 @@
 
           <div v-if="simulationId" class="info-card">
             <div class="info-row">
-              <span class="info-label">Project ID</span>
+              <span class="info-label">프로젝트 ID</span>
               <span class="info-value mono">{{ projectData?.project_id }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">Graph ID</span>
+              <span class="info-label">그래프 ID</span>
               <span class="info-value mono">{{ projectData?.graph_id }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">Simulation ID</span>
+              <span class="info-label">시뮬레이션 ID</span>
               <span class="info-value mono">{{ simulationId }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">Task ID</span>
+              <span class="info-label">태스크 ID</span>
               <span class="info-value mono">{{ taskId || 'Async task completed' }}</span>
             </div>
           </div>
@@ -46,12 +46,12 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">02</span>
-            <span class="step-title">Generate Agent Profiles</span>
+            <span class="step-title">에이전트 프로필 생성</span>
           </div>
           <div class="step-status">
-            <span v-if="phase > 1" class="badge success">Completed</span>
+            <span v-if="phase > 1" class="badge success">완료</span>
             <span v-else-if="phase === 1" class="badge processing">{{ prepareProgress }}%</span>
-            <span v-else class="badge pending">Pending</span>
+            <span v-else class="badge pending">대기</span>
           </div>
         </div>
 
@@ -65,22 +65,22 @@
           <div v-if="profiles.length > 0" class="stats-grid">
             <div class="stat-card">
               <span class="stat-value">{{ profiles.length }}</span>
-              <span class="stat-label">Current Agent Count</span>
+              <span class="stat-label">현재 에이전트 수</span>
             </div>
             <div class="stat-card">
               <span class="stat-value">{{ expectedTotal || '-' }}</span>
-              <span class="stat-label">Expected Total Agents</span>
+              <span class="stat-label">예상 총 에이전트 수</span>
             </div>
             <div class="stat-card">
               <span class="stat-value">{{ totalTopicsCount }}</span>
-              <span class="stat-label">Reality Seed Topic Count</span>
+              <span class="stat-label">씨드 주제 수</span>
             </div>
           </div>
 
           <!-- Profiles List Preview -->
           <div v-if="profiles.length > 0" class="profiles-preview">
             <div class="preview-header">
-              <span class="preview-title">Generated Agent Profiles</span>
+              <span class="preview-title">생성된 에이전트 프로필</span>
             </div>
             <div class="profiles-list">
               <div 
@@ -121,9 +121,9 @@
             <span class="step-title">Generate Dual-Platform Simulation Config</span>
           </div>
           <div class="step-status">
-            <span v-if="phase > 2" class="badge success">Completed</span>
-            <span v-else-if="phase === 2" class="badge processing">Generating</span>
-            <span v-else class="badge pending">Pending</span>
+            <span v-if="phase > 2" class="badge success">완료</span>
+            <span v-else-if="phase === 2" class="badge processing">생성 중</span>
+            <span v-else class="badge pending">대기</span>
           </div>
         </div>
 
@@ -139,35 +139,35 @@
             <div class="config-block">
               <div class="config-grid">
                 <div class="config-item">
-                  <span class="config-item-label">Simulation Duration</span>
+                  <span class="config-item-label">시뮬레이션 기간</span>
                   <span class="config-item-value">{{ simulationConfig.time_config?.total_simulation_hours || '-' }} hrs</span>
                 </div>
                 <div class="config-item">
-                  <span class="config-item-label">Round Duration</span>
+                  <span class="config-item-label">라운드 길이</span>
                   <span class="config-item-value">{{ simulationConfig.time_config?.minutes_per_round || '-' }} min</span>
                 </div>
                 <div class="config-item">
-                  <span class="config-item-label">Total Rounds</span>
+                  <span class="config-item-label">총 라운드</span>
                   <span class="config-item-value">{{ Math.floor((simulationConfig.time_config?.total_simulation_hours * 60 / simulationConfig.time_config?.minutes_per_round)) || '-' }} rounds</span>
                 </div>
                 <div class="config-item">
-                  <span class="config-item-label">Active per Hour</span>
+                  <span class="config-item-label">시간당 활성 수</span>
                   <span class="config-item-value">{{ simulationConfig.time_config?.agents_per_hour_min }}-{{ simulationConfig.time_config?.agents_per_hour_max }}</span>
                 </div>
               </div>
               <div class="time-periods">
                 <div class="period-item">
-                  <span class="period-label">Peak Hours</span>
+                  <span class="period-label">피크 시간대</span>
                   <span class="period-hours">{{ simulationConfig.time_config?.peak_hours?.join(':00, ') }}:00</span>
                   <span class="period-multiplier">×{{ simulationConfig.time_config?.peak_activity_multiplier }}</span>
                 </div>
                 <div class="period-item">
-                  <span class="period-label">Work Hours</span>
+                  <span class="period-label">업무 시간대</span>
                   <span class="period-hours">{{ simulationConfig.time_config?.work_hours?.[0] }}:00-{{ simulationConfig.time_config?.work_hours?.slice(-1)[0] }}:00</span>
                   <span class="period-multiplier">×{{ simulationConfig.time_config?.work_activity_multiplier }}</span>
                 </div>
                 <div class="period-item">
-                  <span class="period-label">Morning Hours</span>
+                  <span class="period-label">아침 시간대</span>
                   <span class="period-hours">{{ simulationConfig.time_config?.morning_hours?.[0] }}:00-{{ simulationConfig.time_config?.morning_hours?.slice(-1)[0] }}:00</span>
                   <span class="period-multiplier">×{{ simulationConfig.time_config?.morning_activity_multiplier }}</span>
                 </div>
@@ -182,7 +182,7 @@
             <!-- Agent Config -->
             <div class="config-block">
               <div class="config-block-header">
-                <span class="config-block-title">Agent Config</span>
+                <span class="config-block-title">에이전트 설정</span>
                 <span class="config-block-badge">{{ simulationConfig.agent_configs?.length || 0 }}</span>
               </div>
               <div class="agents-cards">
@@ -205,7 +205,7 @@
                   
                   <!-- Active Timeline -->
                   <div class="agent-timeline">
-                    <span class="timeline-label">Active Hours</span>
+                    <span class="timeline-label">활성 시간</span>
                     <div class="mini-timeline">
                       <div 
                         v-for="hour in 24" 
@@ -236,26 +236,26 @@
                         <span class="param-value">{{ agent.comments_per_hour }}</span>
                       </div>
                       <div class="param-item">
-                        <span class="param-label">Response Delay</span>
+                        <span class="param-label">응답 지연</span>
                         <span class="param-value">{{ agent.response_delay_min }}-{{ agent.response_delay_max }}min</span>
                       </div>
                     </div>
                     <div class="param-group">
                       <div class="param-item">
-                        <span class="param-label">Activity Level</span>
+                        <span class="param-label">활성도</span>
                         <span class="param-value with-bar">
                           <span class="mini-bar" :style="{ width: (agent.activity_level * 100) + '%' }"></span>
                           {{ (agent.activity_level * 100).toFixed(0) }}%
                         </span>
                       </div>
                       <div class="param-item">
-                        <span class="param-label">Sentiment Bias</span>
+                        <span class="param-label">감정 편향</span>
                         <span class="param-value" :class="agent.sentiment_bias > 0 ? 'positive' : agent.sentiment_bias < 0 ? 'negative' : 'neutral'">
                           {{ agent.sentiment_bias > 0 ? '+' : '' }}{{ agent.sentiment_bias?.toFixed(1) }}
                         </span>
                       </div>
                       <div class="param-item">
-                        <span class="param-label">Influence</span>
+                        <span class="param-label">영향력</span>
                         <span class="param-value highlight">{{ agent.influence_weight?.toFixed(1) }}</span>
                       </div>
                     </div>
@@ -267,7 +267,7 @@
             <!-- Platform Config -->
             <div class="config-block">
               <div class="config-block-header">
-                <span class="config-block-title">Recommendation Algorithm Config</span>
+                <span class="config-block-title">추천 알고리즘 설정</span>
               </div>
               <div class="platforms-grid">
                 <div v-if="simulationConfig.twitter_config" class="platform-card">
@@ -276,23 +276,23 @@
                   </div>
                   <div class="platform-params">
                     <div class="param-row">
-                      <span class="param-label">Recency Weight</span>
+                      <span class="param-label">최신성 가중치</span>
                       <span class="param-value">{{ simulationConfig.twitter_config.recency_weight }}</span>
                     </div>
                     <div class="param-row">
-                      <span class="param-label">Popularity Weight</span>
+                      <span class="param-label">인기도 가중치</span>
                       <span class="param-value">{{ simulationConfig.twitter_config.popularity_weight }}</span>
                     </div>
                     <div class="param-row">
-                      <span class="param-label">Relevance Weight</span>
+                      <span class="param-label">관련성 가중치</span>
                       <span class="param-value">{{ simulationConfig.twitter_config.relevance_weight }}</span>
                     </div>
                     <div class="param-row">
-                      <span class="param-label">Viral Threshold</span>
+                      <span class="param-label">바이럴 임계값</span>
                       <span class="param-value">{{ simulationConfig.twitter_config.viral_threshold }}</span>
                     </div>
                     <div class="param-row">
-                      <span class="param-label">Echo Chamber Strength</span>
+                      <span class="param-label">에코챔버 강도</span>
                       <span class="param-value">{{ simulationConfig.twitter_config.echo_chamber_strength }}</span>
                     </div>
                   </div>
@@ -303,23 +303,23 @@
                   </div>
                   <div class="platform-params">
                     <div class="param-row">
-                      <span class="param-label">Recency Weight</span>
+                      <span class="param-label">최신성 가중치</span>
                       <span class="param-value">{{ simulationConfig.reddit_config.recency_weight }}</span>
                     </div>
                     <div class="param-row">
-                      <span class="param-label">Popularity Weight</span>
+                      <span class="param-label">인기도 가중치</span>
                       <span class="param-value">{{ simulationConfig.reddit_config.popularity_weight }}</span>
                     </div>
                     <div class="param-row">
-                      <span class="param-label">Relevance Weight</span>
+                      <span class="param-label">관련성 가중치</span>
                       <span class="param-value">{{ simulationConfig.reddit_config.relevance_weight }}</span>
                     </div>
                     <div class="param-row">
-                      <span class="param-label">Viral Threshold</span>
+                      <span class="param-label">바이럴 임계값</span>
                       <span class="param-value">{{ simulationConfig.reddit_config.viral_threshold }}</span>
                     </div>
                     <div class="param-row">
-                      <span class="param-label">Echo Chamber Strength</span>
+                      <span class="param-label">에코챔버 강도</span>
                       <span class="param-value">{{ simulationConfig.reddit_config.echo_chamber_strength }}</span>
                     </div>
                   </div>
@@ -330,7 +330,7 @@
             <!-- LLM Config Reasoning -->
             <div v-if="simulationConfig.generation_reasoning" class="config-block">
               <div class="config-block-header">
-                <span class="config-block-title">LLM Config Reasoning</span>
+                <span class="config-block-title">LLM 설정 근거</span>
               </div>
               <div class="reasoning-content">
                 <div 
@@ -351,12 +351,12 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">04</span>
-            <span class="step-title">Initial Activation Orchestration</span>
+            <span class="step-title">초기 활성화 오케스트레이션</span>
           </div>
           <div class="step-status">
-            <span v-if="phase > 3" class="badge success">Completed</span>
-            <span v-else-if="phase === 3" class="badge processing">Orchestrating</span>
-            <span v-else class="badge pending">Pending</span>
+            <span v-if="phase > 3" class="badge success">완료</span>
+            <span v-else-if="phase === 3" class="badge processing">오케스트레이션 중</span>
+            <span v-else class="badge pending">대기</span>
           </div>
         </div>
 
@@ -387,7 +387,7 @@
 
             <!-- Trending Topics -->
             <div class="topics-section">
-              <span class="box-label">Initial Trending Topics</span>
+              <span class="box-label">초기 트렌딩 토픽</span>
               <div class="hot-topics-grid">
                 <span v-for="topic in simulationConfig.event_config.hot_topics" :key="topic" class="hot-topic-tag">
                   # {{ topic }}
@@ -423,11 +423,11 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">05</span>
-            <span class="step-title">Ready</span>
+            <span class="step-title">준비 완료</span>
           </div>
           <div class="step-status">
-            <span v-if="phase >= 4" class="badge processing">In Progress</span>
-            <span v-else class="badge pending">Pending</span>
+            <span v-if="phase >= 4" class="badge processing">진행 중</span>
+            <span v-else class="badge pending">대기</span>
           </div>
         </div>
 
@@ -439,13 +439,13 @@
           <div v-if="simulationConfig && autoGeneratedRounds" class="rounds-config-section">
             <div class="rounds-header">
               <div class="header-left">
-                <span class="section-title">Simulation Rounds Setting</span>
+                <span class="section-title">시뮬레이션 라운드 설정</span>
                 <span class="section-desc">MiroFish automatically plans simulation of <span class="desc-highlight">{{ simulationConfig?.time_config?.total_simulation_hours || '-' }}</span> real-world hours, each round represents <span class="desc-highlight">{{ simulationConfig?.time_config?.minutes_per_round || '-' }}</span> real-world minutes</span>
               </div>
               <label class="switch-control">
                 <input type="checkbox" v-model="useCustomRounds">
                 <span class="switch-track"></span>
-                <span class="switch-label">Custom</span>
+                <span class="switch-label">커스텀</span>
               </label>
             </div>
             
@@ -547,11 +547,11 @@
           <!-- Basic Info -->
           <div class="modal-info-grid">
             <div class="info-item">
-              <span class="info-label">Apparent Age</span>
+              <span class="info-label">외형 연령</span>
               <span class="info-value">{{ selectedProfile.age || '-' }} yrs</span>
             </div>
             <div class="info-item">
-              <span class="info-label">Apparent Gender</span>
+              <span class="info-label">외형 성별</span>
               <span class="info-value">{{ { male: 'Male', female: 'Female', other: 'Other' }[selectedProfile.gender] || selectedProfile.gender }}</span>
             </div>
             <div class="info-item">
@@ -559,20 +559,20 @@
               <span class="info-value">{{ selectedProfile.country || '-' }}</span>
             </div>
             <div class="info-item">
-              <span class="info-label">Apparent MBTI</span>
+              <span class="info-label">외형 MBTI</span>
               <span class="info-value mbti">{{ selectedProfile.mbti || '-' }}</span>
             </div>
           </div>
 
           <!-- Bio -->
           <div class="modal-section">
-            <span class="section-label">Profile Bio</span>
+            <span class="section-label">프로필 소개</span>
             <p class="section-bio">{{ selectedProfile.bio || 'No bio available' }}</p>
           </div>
 
           <!-- Interested Topics -->
           <div class="modal-section" v-if="selectedProfile.interested_topics?.length">
-            <span class="section-label">Reality Seed Associated Topics</span>
+            <span class="section-label">씨드 연관 토픽</span>
             <div class="topics-grid">
               <span 
                 v-for="topic in selectedProfile.interested_topics" 
@@ -584,25 +584,25 @@
 
           <!-- Detailed Persona -->
           <div class="modal-section" v-if="selectedProfile.persona">
-            <span class="section-label">Detailed Profile Background</span>
+            <span class="section-label">프로필 상세 배경</span>
             
             <!-- Persona Dimensions Overview -->
             <div class="persona-dimensions">
               <div class="dimension-card">
-                <span class="dim-title">Full Event Experience</span>
-                <span class="dim-desc">Complete behavioral trajectory in this event</span>
+                <span class="dim-title">전체 이벤트 경험</span>
+                <span class="dim-desc">이 이벤트에서의 전체 행동 궤적</span>
               </div>
               <div class="dimension-card">
-                <span class="dim-title">Behavioral Pattern Profile</span>
-                <span class="dim-desc">Experience summary and behavioral style preferences</span>
+                <span class="dim-title">행동 패턴 프로필</span>
+                <span class="dim-desc">경험 요약과 행동 스타일 선호</span>
               </div>
               <div class="dimension-card">
-                <span class="dim-title">Unique Memory Imprint</span>
-                <span class="dim-desc">Memories formed based on reality seeds</span>
+                <span class="dim-title">고유 메모리 각인</span>
+                <span class="dim-desc">씨드 기반으로 형성된 메모리</span>
               </div>
               <div class="dimension-card">
-                <span class="dim-title">Social Relationship Network</span>
-                <span class="dim-desc">Individual links and interaction graph</span>
+                <span class="dim-title">사회 관계 네트워크</span>
+                <span class="dim-desc">개별 링크 및 상호작용 그래프</span>
               </div>
             </div>
 
@@ -618,7 +618,7 @@
     <!-- Bottom Info / Logs -->
     <div class="system-logs">
       <div class="log-header">
-        <span class="log-title">SYSTEM DASHBOARD</span>
+        <span class="log-title">시스템 대시보드</span>
         <span class="log-id">{{ simulationId || 'NO_SIMULATION' }}</span>
       </div>
       <div class="log-content" ref="logContent">
