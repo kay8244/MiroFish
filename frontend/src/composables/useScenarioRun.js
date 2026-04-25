@@ -150,6 +150,9 @@ export function useScenarioRun() {
       }
 
       // 3. startSimulation + run-status 폴링
+      // max_rounds 는 의도적으로 생략 — 백엔드가 시뮬레이션 설정에서 결정한
+      // 라운드 수를 그대로 사용해야 함. 하드캡을 걸면 사용자가 구성한
+      // 긴 시뮬레이션이 조용히 잘려서 부분 데이터로 리포트가 생성됨.
       phase.value = PHASE.SIMULATING
       phaseLabel.value = 'OASIS 시뮬레이션 실행 중 (Twitter + Reddit)...'
       await startSimulation({ simulation_id: newSimId })
@@ -179,11 +182,12 @@ export function useScenarioRun() {
         force_regenerate: true,
       })
       const reportId = repRes?.data?.report_id
+      const reportTaskId = repRes?.data?.task_id
       if (!reportId) throw new Error('보고서 ID 없음')
       newReportId.value = reportId
 
       await _poll(
-        () => getReportStatus(reportId),
+        () => getReportStatus({ task_id: reportTaskId, simulation_id: newSimId }),
         (res) => {
           const st = res?.data?.status
           if (st === 'completed') return 'done'
