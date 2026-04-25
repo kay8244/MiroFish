@@ -68,3 +68,6 @@ backend/pipeline.sqlite3-shm
 # OMC / 기타 AI 오케스트레이션 로컬 상태
 .omc/
 .gstack/
+
+# QA screenshots (local only)
+frontend/.qa/
