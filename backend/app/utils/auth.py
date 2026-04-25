@@ -12,14 +12,21 @@ Flask-Login 초기화 + 경로/메서드 기반 전역 게이트.
   - GET/HEAD/OPTIONS 는 모든 인증된 역할 (admin/builder/viewer)
 """
 
+import os
+
 from functools import wraps
 
 from flask import jsonify, request
-from flask_login import LoginManager, current_user
+from flask_login import LoginManager, current_user, login_user
 
 from ..models.user import User
 
 login_manager = LoginManager()
+
+# Dev-only: bypass auth gate by auto-logging in as a fixed admin user.
+# 절대 production 에서 켜지 마세요. .env 에 DEV_BYPASS_AUTH=true 로만 활성.
+DEV_BYPASS_AUTH = os.environ.get('DEV_BYPASS_AUTH', '').lower() in ('1', 'true', 'yes')
+DEV_BYPASS_EMAIL = os.environ.get('DEV_BYPASS_EMAIL', 'admin@mirofish.local')
 
 # 인증 없이 허용 (CORS preflight 는 OPTIONS 메서드로 별도 처리)
 PUBLIC_PREFIXES = (
@@ -65,6 +72,13 @@ def enforce_auth():
     # /api/* 만 게이트 대상. 정적 리소스 / 루트 / health 는 위에서 통과.
     if not path.startswith('/api/'):
         return None
+
+    # Dev bypass: 미인증이면 고정 dev 유저로 자동 로그인.
+    # 한 번 로그인되면 이후 요청은 세션 쿠키로 통과 (성능 영향 미미).
+    if DEV_BYPASS_AUTH and not current_user.is_authenticated:
+        dev_user = User.get_by_email(DEV_BYPASS_EMAIL)
+        if dev_user is not None:
+            login_user(dev_user, remember=True)
 
     # 인증 체크
     if not current_user.is_authenticated:
