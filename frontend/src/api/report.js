@@ -10,10 +10,10 @@ export const generateReport = (data) => {
 
 /**
  * Get report generation status
- * @param {string} reportId
+ * @param {Object} data - { task_id?, simulation_id? } — 하나는 필수
  */
-export const getReportStatus = (reportId) => {
-  return service.get(`/api/report/generate/status`, { params: { report_id: reportId } })
+export const getReportStatus = (data) => {
+  return service.post('/api/report/generate/status', data)
 }
 
 /**
