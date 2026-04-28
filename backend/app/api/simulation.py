@@ -946,7 +946,11 @@ def get_simulation_history():
         limit = request.args.get('limit', 20, type=int)
 
         manager = SimulationManager()
-        simulations = manager.list_simulations()[:limit]
+        simulations = sorted(
+            manager.list_simulations(),
+            key=lambda s: s.created_at or '',
+            reverse=True
+        )[:limit]
 
         # 시뮬레이션 데이터 강화, Simulation 파일에서만 읽기
         enriched_simulations = []
