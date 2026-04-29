@@ -273,9 +273,16 @@ class ProjectManager:
 
     @classmethod
     def save_extracted_text(cls, project_id: str, text: str) -> None:
-        """추출된 텍스트 저장"""
+        """추출된 텍스트 저장 (전체 덮어쓰기 — 초기 빌드용)"""
         text_path = cls._get_project_text_path(project_id)
         with open(text_path, 'w', encoding='utf-8') as f:
+            f.write(text)
+
+    @classmethod
+    def append_extracted_text(cls, project_id: str, text: str) -> None:
+        """추출된 텍스트에 추가 (incremental 빌드용 — 기존 그래프에 새 파일 add)"""
+        text_path = cls._get_project_text_path(project_id)
+        with open(text_path, 'a', encoding='utf-8') as f:
             f.write(text)
 
     @classmethod

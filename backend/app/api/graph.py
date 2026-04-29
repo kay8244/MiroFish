@@ -456,6 +456,178 @@ def build_graph():
         }), 500
 
 
+# ============== 인터페이스2.5: 기존 그래프에 파일 추가 (incremental) ==============
+
+@graph_bp.route('/append', methods=['POST'])
+@rate_limit(max_requests=5, period_seconds=60)
+def append_to_graph():
+    """
+    기존 프로젝트의 그래프에 새 파일을 incremental 추가.
+
+    동일 group_id 로 add_episode 만 호출하므로 기존 노드 보존 + entity dedup 작동.
+    풀 재빌드 대비 비용 ~ 추가 파일 분량만큼만 발생.
+
+    요청 (multipart/form-data):
+        project_id: 기존 프로젝트 ID (필수, graph_id 보유 상태여야 함)
+        files: 추가할 파일들 (PDF/MD/TXT, 1+ 개)
+
+    반환:
+        {
+            "success": true,
+            "data": {
+                "project_id": "proj_xxxx",
+                "graph_id": "mirofish_xxxx",       # 기존 그대로
+                "task_id": "task_xxxx",
+                "files_added": [{filename, size}, ...],
+                "added_text_length": 12345
+            }
+        }
+    """
+    try:
+        logger.info("=== 그래프 incremental append 시작 ===")
+
+        project_id = request.form.get('project_id')
+        if not project_id:
+            return jsonify({"success": False, "error": "project_id를 입력하십시오"}), 400
+
+        project = ProjectManager.get_project(project_id)
+        if not project:
+            return jsonify({"success": False, "error": f"프로젝트가 존재하지 않습니다: {project_id}"}), 404
+
+        if not project.graph_id:
+            return jsonify({
+                "success": False,
+                "error": "이 프로젝트는 아직 그래프가 빌드되지 않았습니다. /build 를 먼저 호출하십시오"
+            }), 400
+
+        if project.status == ProjectStatus.GRAPH_BUILDING:
+            return jsonify({
+                "success": False,
+                "error": "그래프 작업이 이미 진행 중입니다. 완료 후 다시 시도하십시오",
+                "task_id": project.graph_build_task_id,
+            }), 400
+
+        if not project.ontology:
+            return jsonify({
+                "success": False,
+                "error": "온톨로지 정의가 없어 incremental add 가 불가합니다"
+            }), 400
+
+        uploaded_files = request.files.getlist('files')
+        if not uploaded_files or all(not f.filename for f in uploaded_files):
+            return jsonify({"success": False, "error": "추가할 파일을 1개 이상 업로드하십시오"}), 400
+
+        # 새 파일 저장 + 텍스트 추출 (기존 ontology/extracted_text 는 유지)
+        new_files_meta = []
+        new_text = ""
+        for file in uploaded_files:
+            if not (file and file.filename and allowed_file(file.filename)):
+                continue
+            file_mime = file.content_type or mimetypes.guess_type(file.filename)[0] or ''
+            if file_mime not in ALLOWED_MIME_TYPES and not file_mime.startswith('text/'):
+                return jsonify({"success": False, "error": f"허용되지 않는 파일 형식입니다: {file_mime}"}), 400
+
+            safe_name = secure_filename(file.filename)
+            if not safe_name:
+                return jsonify({"success": False, "error": "유효하지 않은 파일명입니다"}), 400
+
+            file_info = ProjectManager.save_file_to_project(project_id, file, file.filename)
+            project.files.append({
+                "filename": file_info["original_filename"],
+                "size": file_info["size"],
+            })
+            new_files_meta.append({
+                "filename": file_info["original_filename"],
+                "size": file_info["size"],
+            })
+
+            text = FileParser.extract_text(file_info["path"])
+            text = TextProcessor.preprocess_text(text)
+            new_text += f"\n\n=== {file_info['original_filename']} ===\n{text}"
+
+        if not new_text:
+            return jsonify({"success": False, "error": "처리 가능한 파일이 없습니다"}), 400
+
+        # extracted_text.txt 에 append (재빌드/회수 시 전체 텍스트 보존)
+        ProjectManager.append_extracted_text(project_id, new_text)
+        added_len = len(new_text)
+        project.total_text_length = (project.total_text_length or 0) + added_len
+
+        # build_graph_async 호출 — text 는 NEW 부분만, existing_graph_id 로 같은 그래프에 누적
+        task_manager = TaskManager()
+        builder = GraphBuilderService()
+        graph_name = project.name or 'MiroFish Graph'
+        chunk_size = project.chunk_size or Config.DEFAULT_CHUNK_SIZE
+        chunk_overlap = project.chunk_overlap or Config.DEFAULT_CHUNK_OVERLAP
+
+        task_id = builder.build_graph_async(
+            text=new_text,
+            ontology=project.ontology,
+            graph_name=graph_name,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            existing_graph_id=project.graph_id,
+        )
+        logger.info(
+            f"incremental append 시작: project_id={project_id} "
+            f"graph_id={project.graph_id} task_id={task_id} "
+            f"files={[m['filename'] for m in new_files_meta]} "
+            f"added_chars={added_len}"
+        )
+
+        # 상태 GRAPH_BUILDING 으로 전환 (UI 진행 중 표시 + 중복 제출 방지)
+        project.status = ProjectStatus.GRAPH_BUILDING
+        project.graph_build_task_id = task_id
+        ProjectManager.save_project(project)
+
+        # 완료 시 graph_id 는 동일하지만 status/build_task_id 정리.
+        def append_watcher():
+            build_logger = get_logger('mirofish.append')
+            while True:
+                time.sleep(1)
+                t = task_manager.get_task(task_id)
+                if t is None:
+                    build_logger.warning(f"[{task_id}] task lookup miss")
+                    return
+                if t.status == TaskStatus.COMPLETED:
+                    result = t.result or {}
+                    info = result.get('graph_info') or {}
+                    project.status = ProjectStatus.GRAPH_COMPLETED
+                    project.graph_build_task_id = None
+                    ProjectManager.save_project(project)
+                    build_logger.info(
+                        f"[{task_id}] incremental append 완료: graph_id={project.graph_id} "
+                        f"노드={info.get('node_count')} 엣지={info.get('edge_count')} "
+                        f"chunks_processed={result.get('chunks_processed')}"
+                    )
+                    return
+                if t.status == TaskStatus.FAILED:
+                    err = t.error or t.message or 'unknown'
+                    project.status = ProjectStatus.FAILED
+                    project.error = str(err)
+                    ProjectManager.save_project(project)
+                    build_logger.error(f"[{task_id}] incremental append 실패: {err}")
+                    return
+
+        threading.Thread(target=append_watcher, daemon=True).start()
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "project_id": project_id,
+                "graph_id": project.graph_id,
+                "task_id": task_id,
+                "files_added": new_files_meta,
+                "added_text_length": added_len,
+                "message": "기존 그래프에 파일 추가 작업이 시작되었습니다",
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"incremental append 실패: {e}\n{traceback.format_exc()}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ============== 작업 조회 인터페이스 ==============
 
 @graph_bp.route('/task/<task_id>', methods=['GET'])
