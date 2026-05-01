@@ -414,8 +414,9 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { generateOntology, getProject, buildGraph, getTaskStatus, getGraphData } from '../api/graph'
+import { generateOntology, getProject, buildGraph } from '../api/graph'
 import { getPendingUpload, clearPendingUpload } from '../store/pendingUpload'
+import { useGraphPolling } from '../composables/useGraphPolling'
 import * as d3 from 'd3'
 
 const route = useRoute()
@@ -440,8 +441,24 @@ const isFullScreen = ref(false)
 const graphContainer = ref(null)
 const graphSvg = ref(null)
 
-// Polling timer
-let pollTimer = null
+// Polling (graph + task) — extracted to composable
+const {
+  startGraphPolling,
+  stopGraphPolling,
+  refreshGraph,
+  startPollingTask,
+  stopPolling,
+  loadGraph,
+} = useGraphPolling({
+  currentProjectId,
+  projectData,
+  graphData,
+  currentPhase,
+  error,
+  buildProgress,
+  graphLoading,
+  onGraphUpdate: () => renderGraph(),
+})
 
 // Computed properties
 const statusClass = computed(() => {
@@ -704,160 +721,6 @@ const startBuildGraph = async () => {
     console.error('Build graph error:', err)
     error.value = 'Failed to start graph build: ' + (err.message || 'Unknown error')
     buildProgress.value = null
-  }
-}
-
-// Graph data polling timer
-let graphPollTimer = null
-
-// Start graph data polling
-const startGraphPolling = () => {
-  // Fetch immediately
-  fetchGraphData()
-  
-  // Auto-fetch graph data every 10 seconds
-  graphPollTimer = setInterval(async () => {
-    await fetchGraphData()
-  }, 10000)
-}
-
-// Manually refresh graph
-const refreshGraph = async () => {
-  graphLoading.value = true
-  await fetchGraphData()
-  graphLoading.value = false
-}
-
-// Stop graph data polling
-const stopGraphPolling = () => {
-  if (graphPollTimer) {
-    clearInterval(graphPollTimer)
-    graphPollTimer = null
-  }
-}
-
-// Fetch graph data
-const fetchGraphData = async () => {
-  try {
-    // First fetch project info to get graph_id
-    const projectResponse = await getProject(currentProjectId.value)
-    
-    if (projectResponse.success && projectResponse.data.graph_id) {
-      const graphId = projectResponse.data.graph_id
-      projectData.value = projectResponse.data
-      
-      // Fetch graph data
-      const graphResponse = await getGraphData(graphId)
-      
-      if (graphResponse.success && graphResponse.data) {
-        const newData = graphResponse.data
-        const newNodeCount = newData.node_count || newData.nodes?.length || 0
-        const oldNodeCount = graphData.value?.node_count || graphData.value?.nodes?.length || 0
-        
-        console.log('Fetching graph data, nodes:', newNodeCount, 'edges:', newData.edge_count || newData.edges?.length || 0)
-        
-        // Update rendering when data changes
-        if (newNodeCount !== oldNodeCount || !graphData.value) {
-          graphData.value = newData
-          await nextTick()
-          renderGraph()
-        }
-      }
-    }
-  } catch (err) {
-    console.log('Graph data fetch:', err.message || 'not ready')
-  }
-}
-
-// Poll task status
-const startPollingTask = (taskId) => {
-  // Execute one query immediately
-  pollTaskStatus(taskId)
-  
-  // Then poll on a timer
-  pollTimer = setInterval(() => {
-    pollTaskStatus(taskId)
-  }, 2000)
-}
-
-// Query task status
-const pollTaskStatus = async (taskId) => {
-  try {
-    const response = await getTaskStatus(taskId)
-    
-    if (response.success) {
-      const task = response.data
-      
-      // Update progress display
-      buildProgress.value = {
-        progress: task.progress || 0,
-        message: task.message || 'Processing...'
-      }
-      
-      console.log('Task status:', task.status, 'Progress:', task.progress)
-      
-      if (task.status === 'completed') {
-        console.log('✅ Graph build complete, loading full data...')
-        
-        stopPolling()
-        stopGraphPolling()
-        currentPhase.value = 2
-        
-        // Update progress display to completed state
-        buildProgress.value = {
-          progress: 100,
-          message: 'Build complete, loading graph...'
-        }
-        
-        // Reload project data to get graph_id
-        const projectResponse = await getProject(currentProjectId.value)
-        if (projectResponse.success) {
-          projectData.value = projectResponse.data
-          
-          // Finally load complete graph data
-          if (projectResponse.data.graph_id) {
-            console.log('📊 Loading full graph:', projectResponse.data.graph_id)
-            await loadGraph(projectResponse.data.graph_id)
-            console.log('✅ Graph loaded successfully')
-          }
-        }
-        
-        // Clear progress display
-        buildProgress.value = null
-      } else if (task.status === 'failed') {
-        stopPolling()
-        stopGraphPolling()
-        error.value = 'Graph build failed: ' + (task.error || 'Unknown error')
-        buildProgress.value = null
-      }
-    }
-  } catch (err) {
-    console.error('Poll task error:', err)
-  }
-}
-
-const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
-}
-
-// Load graph data
-const loadGraph = async (graphId) => {
-  try {
-    graphLoading.value = true
-    const response = await getGraphData(graphId)
-    
-    if (response.success) {
-      graphData.value = response.data
-      await nextTick()
-      renderGraph()
-    }
-  } catch (err) {
-    console.error('Load graph error:', err)
-  } finally {
-    graphLoading.value = false
   }
 }
 
