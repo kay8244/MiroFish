@@ -121,158 +121,15 @@
           <span class="header-title">구축 파이프라인</span>
         </div>
 
-        <div class="process-content">
-          <!-- Phase 1: Ontology Generation -->
-          <div class="process-phase" :class="{ 'active': currentPhase === 0, 'completed': currentPhase > 0 }">
-            <div class="phase-header">
-              <span class="phase-num">01</span>
-              <div class="phase-info">
-                <div class="phase-title">온톨로지 생성</div>
-                <div class="phase-api">/api/graph/ontology/generate</div>
-              </div>
-              <span class="phase-status" :class="getPhaseStatusClass(0)">
-                {{ getPhaseStatusText(0) }}
-              </span>
-            </div>
-            
-            <div class="phase-detail">
-              <div class="detail-section">
-                <div class="detail-label">API 설명</div>
-                <div class="detail-content">
-                  After uploading documents, LLM analyzes the content and auto-generates an ontology structure (entity types + relation types) suited for opinion simulation
-                </div>
-              </div>
-              
-              <!-- Ontology generation progress -->
-              <div class="detail-section" v-if="ontologyProgress && currentPhase === 0">
-                <div class="detail-label">생성 진행률</div>
-                <div class="ontology-progress">
-                  <div class="progress-spinner"></div>
-                  <span class="progress-text">{{ ontologyProgress.message }}</span>
-                </div>
-              </div>
-              
-              <!-- Generated ontology info -->
-              <div class="detail-section" v-if="projectData?.ontology">
-                <div class="detail-label">Generated Entity Types ({{ projectData.ontology.entity_types?.length || 0 }})</div>
-                <div class="entity-tags">
-                  <span 
-                    v-for="entity in projectData.ontology.entity_types" 
-                    :key="entity.name"
-                    class="entity-tag"
-                  >
-                    {{ entity.name }}
-                  </span>
-                </div>
-              </div>
-              
-              <div class="detail-section" v-if="projectData?.ontology">
-                <div class="detail-label">Generated Relation Types ({{ projectData.ontology.relation_types?.length || 0 }})</div>
-                <div class="relation-list">
-                  <div 
-                    v-for="(rel, idx) in projectData.ontology.relation_types?.slice(0, 5) || []" 
-                    :key="idx"
-                    class="relation-item"
-                  >
-                    <span class="rel-source">{{ rel.source_type }}</span>
-                    <span class="rel-arrow">→</span>
-                    <span class="rel-name">{{ rel.name }}</span>
-                    <span class="rel-arrow">→</span>
-                    <span class="rel-target">{{ rel.target_type }}</span>
-                  </div>
-                  <div v-if="(projectData.ontology.relation_types?.length || 0) > 5" class="relation-more">
-                    +{{ projectData.ontology.relation_types.length - 5 }} more relations...
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Waiting state -->
-              <div class="detail-section waiting-state" v-if="!projectData?.ontology && currentPhase === 0 && !ontologyProgress">
-                <div class="waiting-hint">Waiting for ontology generation...</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Phase 2: Knowledge Graph Build -->
-          <div class="process-phase" :class="{ 'active': currentPhase === 1, 'completed': currentPhase > 1 }">
-            <div class="phase-header">
-              <span class="phase-num">02</span>
-              <div class="phase-info">
-                <div class="phase-title">지식 그래프 구축</div>
-                <div class="phase-api">/api/graph/build</div>
-              </div>
-              <span class="phase-status" :class="getPhaseStatusClass(1)">
-                {{ getPhaseStatusText(1) }}
-              </span>
-            </div>
-            
-            <div class="phase-detail">
-              <div class="detail-section">
-                <div class="detail-label">API 설명</div>
-                <div class="detail-content">
-                  Based on the generated ontology, documents are chunked and processed via the Zep API to build the knowledge graph, extracting entities and relations
-                </div>
-              </div>
-              
-              <!-- Waiting for ontology to complete -->
-              <div class="detail-section waiting-state" v-if="currentPhase < 1">
-                <div class="waiting-hint">Waiting for ontology generation to complete...</div>
-              </div>
-              
-              <!-- Build Progress -->
-              <div class="detail-section" v-if="buildProgress && currentPhase >= 1">
-                <div class="detail-label">구축 진행률</div>
-                <div class="progress-bar">
-                  <div class="progress-fill" :style="{ width: buildProgress.progress + '%' }"></div>
-                </div>
-                <div class="progress-info">
-                  <span class="progress-message">{{ buildProgress.message }}</span>
-                  <span class="progress-percent">{{ buildProgress.progress }}%</span>
-                </div>
-              </div>
-              
-              <div class="detail-section" v-if="graphData">
-                <div class="detail-label">구축 결과</div>
-                <div class="build-result">
-                  <div class="result-item">
-                    <span class="result-value">{{ graphData.node_count }}</span>
-                    <span class="result-label">엔티티 노드</span>
-                  </div>
-                  <div class="result-item">
-                    <span class="result-value">{{ graphData.edge_count }}</span>
-                    <span class="result-label">관계 엣지</span>
-                  </div>
-                  <div class="result-item">
-                    <span class="result-value">{{ entityTypes.length }}</span>
-                    <span class="result-label">엔티티 타입</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Phase 3: Complete -->
-          <div class="process-phase" :class="{ 'active': currentPhase === 2, 'completed': currentPhase > 2 }">
-            <div class="phase-header">
-              <span class="phase-num">03</span>
-              <div class="phase-info">
-                <div class="phase-title">구축 완료</div>
-                <div class="phase-api">다음 단계로 진행 가능</div>
-              </div>
-              <span class="phase-status" :class="getPhaseStatusClass(2)">
-                {{ getPhaseStatusText(2) }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Next step button -->
-          <div class="next-step-section" v-if="currentPhase >= 2">
-            <button class="next-step-btn" @click="goToNextStep" :disabled="currentPhase < 2">
-              Proceed to Environment Setup
-              <span class="btn-arrow">→</span>
-            </button>
-          </div>
-        </div>
+        <BuildPipeline
+          :current-phase="currentPhase"
+          :ontology-progress="ontologyProgress"
+          :project-data="projectData"
+          :build-progress="buildProgress"
+          :graph-data="graphData"
+          :entity-types="entityTypes"
+          @next-step="goToNextStep"
+        />
 
         <!-- Project info panel -->
         <div class="project-panel">
@@ -312,6 +169,7 @@ import { getPendingUpload, clearPendingUpload } from '../store/pendingUpload'
 import { useGraphPolling } from '../composables/useGraphPolling'
 import { useGraphRenderer } from '../composables/useGraphRenderer'
 import DetailPanel from '../components/Process/DetailPanel.vue'
+import BuildPipeline from '../components/Process/BuildPipeline.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -425,23 +283,6 @@ const selectEdge = (edgeData) => {
     type: 'edge',
     data: edgeData
   }
-}
-
-const getPhaseStatusClass = (phase) => {
-  if (currentPhase.value > phase) return 'completed'
-  if (currentPhase.value === phase) return 'active'
-  return 'pending'
-}
-
-const getPhaseStatusText = (phase) => {
-  if (currentPhase.value > phase) return 'Completed'
-  if (currentPhase.value === phase) {
-    if (phase === 1 && buildProgress.value) {
-      return `${buildProgress.value.progress}%`
-    }
-    return 'In Progress'
-  }
-  return 'Pending'
 }
 
 // Initialize - handle new project or load existing project
