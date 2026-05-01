@@ -38,6 +38,7 @@ Copy `.env.example` to `.env`. Required keys:
 - `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL_NAME` — any OpenAI SDK-compatible LLM API
 - `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD` — Graphiti(Neo4j) 지식 그래프. 로컬 컨테이너는 `docker compose -f graphiti-db/docker-compose.yml up -d`
 - Optional: `LLM_BOOST_*` variants for acceleration
+- Optional: `REDIS_URL` — 설정 시 시뮬레이션 IPC 가 Redis 백엔드로 전환 (TODOS #2). 미설정 시 파일 IPC. docker-compose 사용 시 자동으로 `redis://redis:6379/0`.
 - Optional (legacy): `ZEP_API_KEY` / `ZEP_BASE_URL` — `uv sync --extra zep`로 Zep Cloud 경로 활성화 시에만 필요. 기본 Graphiti 경로에서는 불필요.
 
 ## Architecture
