@@ -131,31 +131,7 @@
           @next-step="goToNextStep"
         />
 
-        <!-- Project info panel -->
-        <div class="project-panel">
-          <div class="project-header">
-            <span class="project-icon">◇</span>
-            <span class="project-title">프로젝트 정보</span>
-          </div>
-          <div class="project-details" v-if="projectData">
-            <div class="project-item">
-              <span class="item-label">프로젝트 이름</span>
-              <span class="item-value">{{ projectData.name }}</span>
-            </div>
-            <div class="project-item">
-              <span class="item-label">프로젝트 ID</span>
-              <span class="item-value code">{{ projectData.project_id }}</span>
-            </div>
-            <div class="project-item" v-if="projectData.graph_id">
-              <span class="item-label">그래프 ID</span>
-              <span class="item-value code">{{ projectData.graph_id }}</span>
-            </div>
-            <div class="project-item">
-              <span class="item-label">시뮬레이션 요청</span>
-              <span class="item-value">{{ projectData.simulation_requirement || '-' }}</span>
-            </div>
-          </div>
-        </div>
+        <ProjectInfoPanel :project-data="projectData" />
       </div>
     </div>
   </div>
@@ -170,6 +146,7 @@ import { useGraphPolling } from '../composables/useGraphPolling'
 import { useGraphRenderer } from '../composables/useGraphRenderer'
 import DetailPanel from '../components/Process/DetailPanel.vue'
 import BuildPipeline from '../components/Process/BuildPipeline.vue'
+import ProjectInfoPanel from '../components/Process/ProjectInfoPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
