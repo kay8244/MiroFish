@@ -134,3 +134,52 @@ class User(UserMixin):
         with _db_conn() as conn:
             row = conn.execute('SELECT COUNT(*) AS n FROM users').fetchone()
             return int(row['n'])
+
+    @classmethod
+    def list_all(cls) -> list:
+        """admin 사용자 관리 화면용. password_hash 는 노출하지 않음."""
+        with _db_conn() as conn:
+            rows = conn.execute(
+                'SELECT id, email, role, created_at, updated_at FROM users '
+                'ORDER BY created_at ASC'
+            ).fetchall()
+        return [
+            {
+                'id': r['id'],
+                'email': r['email'],
+                'role': r['role'],
+                'created_at': r['created_at'],
+                'updated_at': r['updated_at'],
+            }
+            for r in rows
+        ]
+
+    @classmethod
+    def delete(cls, user_id: int) -> bool:
+        with _db_lock, _db_conn() as conn:
+            cur = conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+            return cur.rowcount > 0
+
+    @classmethod
+    def update_role(cls, user_id: int, role: str) -> bool:
+        if role not in VALID_ROLES:
+            raise ValueError(f"role must be one of {VALID_ROLES}, got {role!r}")
+        with _db_lock, _db_conn() as conn:
+            cur = conn.execute(
+                'UPDATE users SET role = ?, updated_at = ? WHERE id = ?',
+                (role, _now_iso(), user_id),
+            )
+            return cur.rowcount > 0
+
+    @classmethod
+    def set_password(cls, user_id: int, password: str) -> bool:
+        """비밀번호 변경 (8자 이상). 본인 또는 admin 이 호출."""
+        if len(password) < 8:
+            raise ValueError('password must be >= 8 characters')
+        pw_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        with _db_lock, _db_conn() as conn:
+            cur = conn.execute(
+                'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?',
+                (pw_hash, _now_iso(), user_id),
+            )
+            return cur.rowcount > 0

@@ -145,3 +145,239 @@ class TestRoleGate:
         resp = client.post("/api/graph/build", json={})
         assert resp.status_code != 403
         assert resp.status_code != 401
+
+
+# ============================================================================
+# 비밀번호 변경 (본인)
+# ============================================================================
+
+class TestChangeOwnPassword:
+    def test_requires_auth(self, client):
+        resp = client.post("/api/auth/password", json={
+            "old_password": "x", "new_password": "y"
+        })
+        assert resp.status_code == 401
+
+    def test_missing_fields(self, client, builder_user, login_as):
+        login_as("builder@test.local")
+        resp = client.post("/api/auth/password", json={})
+        assert resp.status_code == 400
+
+    def test_wrong_old_password(self, client, builder_user, login_as):
+        login_as("builder@test.local")
+        resp = client.post("/api/auth/password", json={
+            "old_password": "wrong",
+            "new_password": "newpass123",
+        })
+        assert resp.status_code == 401
+
+    def test_short_new_password_rejected(self, client, builder_user, login_as):
+        login_as("builder@test.local")
+        resp = client.post("/api/auth/password", json={
+            "old_password": "testpass123",
+            "new_password": "short",
+        })
+        assert resp.status_code == 400
+
+    def test_happy_path_then_login_with_new_password(
+        self, client, builder_user, login_as
+    ):
+        login_as("builder@test.local")
+        # 변경
+        resp = client.post("/api/auth/password", json={
+            "old_password": "testpass123",
+            "new_password": "newpass1234",
+        })
+        assert resp.status_code == 200
+        # logout 후 새 비밀번호로 로그인 검증
+        client.post("/api/auth/logout")
+        ok = client.post("/api/auth/login", json={
+            "email": "builder@test.local",
+            "password": "newpass1234",
+        })
+        assert ok.status_code == 200
+        # 옛 비밀번호는 거부
+        client.post("/api/auth/logout")
+        bad = client.post("/api/auth/login", json={
+            "email": "builder@test.local",
+            "password": "testpass123",
+        })
+        assert bad.status_code == 401
+
+
+# ============================================================================
+# 사용자 관리 (admin only)
+# ============================================================================
+
+class TestListUsers:
+    def test_requires_admin(self, client, builder_user, login_as):
+        login_as("builder@test.local")
+        resp = client.get("/api/auth/users")
+        assert resp.status_code == 403
+
+    def test_admin_lists_users(self, client, admin_user, builder_user, login_as):
+        login_as("admin@test.local")
+        resp = client.get("/api/auth/users")
+        assert resp.status_code == 200
+        body = resp.get_json()
+        emails = {u["email"] for u in body["users"]}
+        assert "admin@test.local" in emails
+        assert "builder@test.local" in emails
+        # password_hash 누설 안 됨
+        for u in body["users"]:
+            assert "password_hash" not in u
+
+
+class TestCreateUser:
+    def test_requires_admin(self, client, builder_user, login_as):
+        login_as("builder@test.local")
+        resp = client.post("/api/auth/users", json={
+            "email": "x@y.z", "password": "abcd1234", "role": "viewer"
+        })
+        assert resp.status_code == 403
+
+    def test_missing_fields(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.post("/api/auth/users", json={"email": "x@y.z"})
+        assert resp.status_code == 400
+
+    def test_invalid_role(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.post("/api/auth/users", json={
+            "email": "x@y.z", "password": "abcd1234", "role": "superuser"
+        })
+        assert resp.status_code == 400
+        assert "role" in resp.get_json()["error"]
+
+    def test_duplicate_email_409(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.post("/api/auth/users", json={
+            "email": "admin@test.local",
+            "password": "newpass1234",
+            "role": "viewer",
+        })
+        assert resp.status_code == 409
+
+    def test_happy_path(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.post("/api/auth/users", json={
+            "email": "newbie@test.local",
+            "password": "abcd1234",
+            "role": "viewer",
+        })
+        assert resp.status_code == 201
+        body = resp.get_json()
+        assert body["user"]["email"] == "newbie@test.local"
+        assert body["user"]["role"] == "viewer"
+
+    def test_short_password_rejected(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.post("/api/auth/users", json={
+            "email": "x@y.z", "password": "short", "role": "viewer"
+        })
+        assert resp.status_code == 400
+
+
+class TestDeleteUser:
+    def test_requires_admin(self, client, builder_user, login_as):
+        login_as("builder@test.local")
+        resp = client.delete("/api/auth/users/999")
+        assert resp.status_code == 403
+
+    def test_cannot_delete_self(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.delete(f"/api/auth/users/{admin_user.id}")
+        assert resp.status_code == 400
+        assert "yourself" in resp.get_json()["error"]
+
+    def test_unknown_user_404(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.delete("/api/auth/users/9999")
+        assert resp.status_code == 404
+
+    def test_happy_path(self, client, admin_user, builder_user, login_as):
+        login_as("admin@test.local")
+        resp = client.delete(f"/api/auth/users/{builder_user.id}")
+        assert resp.status_code == 200
+        # 다시 삭제하면 404
+        resp2 = client.delete(f"/api/auth/users/{builder_user.id}")
+        assert resp2.status_code == 404
+
+
+class TestUpdateRole:
+    def test_requires_admin(self, client, builder_user, login_as):
+        login_as("builder@test.local")
+        resp = client.patch("/api/auth/users/1/role", json={"role": "admin"})
+        assert resp.status_code == 403
+
+    def test_invalid_role(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.patch(f"/api/auth/users/{admin_user.id}/role", json={"role": "ghost"})
+        assert resp.status_code == 400
+
+    def test_unknown_user_404(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.patch("/api/auth/users/9999/role", json={"role": "viewer"})
+        assert resp.status_code == 404
+
+    def test_promote_viewer_to_builder(
+        self, client, admin_user, viewer_user, login_as
+    ):
+        login_as("admin@test.local")
+        resp = client.patch(
+            f"/api/auth/users/{viewer_user.id}/role", json={"role": "builder"}
+        )
+        assert resp.status_code == 200
+
+    def test_cannot_demote_last_admin(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        # 시스템에 admin 이 1명만 있을 때 자기 자신을 강등 시도
+        resp = client.patch(
+            f"/api/auth/users/{admin_user.id}/role", json={"role": "viewer"}
+        )
+        assert resp.status_code == 400
+        assert "last admin" in resp.get_json()["error"]
+
+
+class TestAdminResetPassword:
+    def test_requires_admin(self, client, builder_user, login_as):
+        login_as("builder@test.local")
+        resp = client.post("/api/auth/users/1/password", json={"password": "abcd1234"})
+        assert resp.status_code == 403
+
+    def test_missing_password(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.post(f"/api/auth/users/{admin_user.id}/password", json={})
+        assert resp.status_code == 400
+
+    def test_short_password_rejected(self, client, admin_user, builder_user, login_as):
+        login_as("admin@test.local")
+        resp = client.post(
+            f"/api/auth/users/{builder_user.id}/password",
+            json={"password": "short"},
+        )
+        assert resp.status_code == 400
+
+    def test_unknown_user_404(self, client, admin_user, login_as):
+        login_as("admin@test.local")
+        resp = client.post(
+            "/api/auth/users/9999/password", json={"password": "abcd1234"}
+        )
+        assert resp.status_code == 404
+
+    def test_happy_path_then_user_can_login(
+        self, client, admin_user, builder_user, login_as
+    ):
+        login_as("admin@test.local")
+        resp = client.post(
+            f"/api/auth/users/{builder_user.id}/password",
+            json={"password": "resetpass1"},
+        )
+        assert resp.status_code == 200
+        # 새 비밀번호로 로그인 가능
+        client.post("/api/auth/logout")
+        ok = client.post("/api/auth/login", json={
+            "email": "builder@test.local",
+            "password": "resetpass1",
+        })
+        assert ok.status_code == 200
