@@ -21,76 +21,11 @@
       <StepConfig :phase="phase" :simulation-config="simulationConfig" />
 
       <!-- Step 04: Initial Activation Orchestration -->
-      <div class="step-card" :class="{ 'active': phase === 3, 'completed': phase > 3 }">
-        <div class="card-header">
-          <div class="step-info">
-            <span class="step-num">04</span>
-            <span class="step-title">초기 활성화 오케스트레이션</span>
-          </div>
-          <div class="step-status">
-            <span v-if="phase > 3" class="badge success">완료</span>
-            <span v-else-if="phase === 3" class="badge processing">오케스트레이션 중</span>
-            <span v-else class="badge pending">대기</span>
-          </div>
-        </div>
-
-        <div class="card-content">
-          <p class="api-note">POST /api/simulation/prepare</p>
-          <p class="description">
-            Based on the narrative direction, automatically generates initial activation events and trending topics to guide the initial state of the simulation world
-          </p>
-
-          <div v-if="simulationConfig?.event_config" class="orchestration-content">
-            <!-- Narrative Direction -->
-            <div class="narrative-box">
-              <span class="box-label narrative-label">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="special-icon">
-                  <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="url(#paint0_linear)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M16.24 7.76L14.12 14.12L7.76 16.24L9.88 9.88L16.24 7.76Z" fill="url(#paint0_linear)" stroke="url(#paint0_linear)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  <defs>
-                    <linearGradient id="paint0_linear" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-                      <stop stop-color="#FF5722"/>
-                      <stop offset="1" stop-color="#FF9800"/>
-                    </linearGradient>
-                  </defs>
-                </svg>
-                Narrative Direction
-              </span>
-              <p class="narrative-text">{{ simulationConfig.event_config.narrative_direction }}</p>
-            </div>
-
-            <!-- Trending Topics -->
-            <div class="topics-section">
-              <span class="box-label">초기 트렌딩 토픽</span>
-              <div class="hot-topics-grid">
-                <span v-for="topic in simulationConfig.event_config.hot_topics" :key="topic" class="hot-topic-tag">
-                  # {{ topic }}
-                </span>
-              </div>
-            </div>
-
-            <!-- Initial Post Stream -->
-            <div class="initial-posts-section">
-              <span class="box-label">Initial Activation Sequence ({{ simulationConfig.event_config.initial_posts.length }})</span>
-              <div class="posts-timeline">
-                <div v-for="(post, idx) in simulationConfig.event_config.initial_posts" :key="idx" class="timeline-item">
-                  <div class="timeline-marker"></div>
-                  <div class="timeline-content">
-                    <div class="post-header">
-                      <span class="post-role">{{ post.poster_type }}</span>
-                      <span class="post-agent-info">
-                        <span class="post-id">Agent {{ post.poster_agent_id }}</span>
-                        <span class="post-username">@{{ getAgentUsername(post.poster_agent_id) }}</span>
-                      </span>
-                    </div>
-                    <p class="post-text">{{ post.content }}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <StepOrchestration
+        :phase="phase"
+        :simulation-config="simulationConfig"
+        :profiles="profiles"
+      />
 
       <!-- Step 05: Ready -->
       <div class="step-card" :class="{ 'active': phase === 4 }">
@@ -231,6 +166,7 @@ import ProfileDetailModal from './Step2/ProfileDetailModal.vue'
 import StepInstance from './Step2/StepInstance.vue'
 import StepProfiles from './Step2/StepProfiles.vue'
 import StepConfig from './Step2/StepConfig.vue'
+import StepOrchestration from './Step2/StepOrchestration.vue'
 
 const props = defineProps({
   simulationId: String,  // Passed from parent component
@@ -264,13 +200,6 @@ const {
 const selectedProfile = ref(null)
 const useCustomRounds = ref(false)
 const customMaxRounds = ref(40)
-
-const getAgentUsername = (agentId) => {
-  if (profiles.value && profiles.value.length > agentId && agentId >= 0) {
-    return profiles.value[agentId]?.username || `agent_${agentId}`
-  }
-  return `agent_${agentId}`
-}
 
 const handleStartSimulation = () => {
   const params = {}
