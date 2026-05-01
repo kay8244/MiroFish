@@ -131,136 +131,52 @@ except ImportError as e:
     sys.exit(1)
 
 
-# IPC相关常量
-IPC_COMMANDS_DIR = "ipc_commands"
-IPC_RESPONSES_DIR = "ipc_responses"
-ENV_STATUS_FILE = "env_status.json"
-
-class CommandType:
-    """命令类型常量"""
-    INTERVIEW = "interview"
-    BATCH_INTERVIEW = "batch_interview"
-    CLOSE_ENV = "close_env"
+# 공유 IPC 팩토리: REDIS_URL 설정 시 Redis, 미설정 시 파일 IPC (TODOS #2)
+from app.services.simulation_ipc_factory import make_ipc_server
+from app.services.simulation_ipc import CommandType
 
 
 class IPCHandler:
-    """IPC命令处理器"""
-    
+    """IPC 명령 핸들러 — 백엔드 선택은 make_ipc_server() 가 담당"""
+
     def __init__(self, simulation_dir: str, env, agent_graph):
         self.simulation_dir = simulation_dir
         self.env = env
         self.agent_graph = agent_graph
-        self.commands_dir = os.path.join(simulation_dir, IPC_COMMANDS_DIR)
-        self.responses_dir = os.path.join(simulation_dir, IPC_RESPONSES_DIR)
-        self.status_file = os.path.join(simulation_dir, ENV_STATUS_FILE)
-        self._running = True
-        
-        # 确保目录存在
-        os.makedirs(self.commands_dir, exist_ok=True)
-        os.makedirs(self.responses_dir, exist_ok=True)
-    
+        self.server = make_ipc_server(simulation_dir)
+
     def update_status(self, status: str):
-        """更新环境状态"""
-        with open(self.status_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                "status": status,
-                "timestamp": datetime.now().isoformat()
-            }, f, ensure_ascii=False, indent=2)
-    
-    def poll_command(self) -> Optional[Dict[str, Any]]:
-        """轮询获取待处理命令"""
-        if not os.path.exists(self.commands_dir):
-            return None
-        
-        # 获取命令文件（按时间排序）
-        command_files = []
-        for filename in os.listdir(self.commands_dir):
-            if filename.endswith('.json'):
-                filepath = os.path.join(self.commands_dir, filename)
-                command_files.append((filepath, os.path.getmtime(filepath)))
-        
-        command_files.sort(key=lambda x: x[1])
-        
-        for filepath, _ in command_files:
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, OSError):
-                continue
-        
-        return None
-    
-    def send_response(self, command_id: str, status: str, result: Dict = None, error: str = None):
-        """发送响应"""
-        response = {
-            "command_id": command_id,
-            "status": status,
-            "result": result,
-            "error": error,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        response_file = os.path.join(self.responses_dir, f"{command_id}.json")
-        with open(response_file, 'w', encoding='utf-8') as f:
-            json.dump(response, f, ensure_ascii=False, indent=2)
-        
-        # 删除命令文件
-        command_file = os.path.join(self.commands_dir, f"{command_id}.json")
-        try:
-            os.remove(command_file)
-        except OSError:
-            pass
-    
+        """환경 상태 갱신 — IPC 백엔드 (파일/Redis) 위임"""
+        self.server.update_status(status)
+
     async def handle_interview(self, command_id: str, agent_id: int, prompt: str) -> bool:
-        """
-        处理单个Agent采访命令
-        
-        Returns:
-            True 表示成功，False 表示失败
-        """
+        """단일 Agent 인터뷰 처리"""
         try:
-            # 获取Agent
             agent = self.agent_graph.get_agent(agent_id)
-            
-            # 创建Interview动作
             interview_action = ManualAction(
                 action_type=ActionType.INTERVIEW,
                 action_args={"prompt": prompt}
             )
-            
-            # 执行Interview
-            actions = {agent: interview_action}
-            await self.env.step(actions)
-            
-            # 从数据库获取结果
+            await self.env.step({agent: interview_action})
             result = self._get_interview_result(agent_id)
-            
-            self.send_response(command_id, "completed", result=result)
+            self.server.send_success(command_id, result)
             print(f"  Interview完成: agent_id={agent_id}")
             return True
-            
         except Exception as e:
             error_msg = str(e)
             print(f"  Interview失败: agent_id={agent_id}, error={error_msg}")
-            self.send_response(command_id, "failed", error=error_msg)
+            self.server.send_error(command_id, error_msg)
             return False
-    
+
     async def handle_batch_interview(self, command_id: str, interviews: List[Dict]) -> bool:
-        """
-        处理批量采访命令
-        
-        Args:
-            interviews: [{"agent_id": int, "prompt": str}, ...]
-        """
+        """배치 인터뷰 처리"""
         try:
-            # 构建动作字典
             actions = {}
-            agent_prompts = {}  # 记录每个agent的prompt
-            
+            agent_prompts = {}
+
             for interview in interviews:
                 agent_id = interview.get("agent_id")
                 prompt = interview.get("prompt", "")
-                
                 try:
                     agent = self.agent_graph.get_agent(agent_id)
                     actions[agent] = ManualAction(
@@ -270,51 +186,40 @@ class IPCHandler:
                     agent_prompts[agent_id] = prompt
                 except Exception as e:
                     print(f"  警告: 无法获取Agent {agent_id}: {e}")
-            
+
             if not actions:
-                self.send_response(command_id, "failed", error="没有有效的Agent")
+                self.server.send_error(command_id, "没有有效的Agent")
                 return False
-            
-            # 执行批量Interview
+
             await self.env.step(actions)
-            
-            # 获取所有结果
+
             results = {}
             for agent_id in agent_prompts.keys():
-                result = self._get_interview_result(agent_id)
-                results[agent_id] = result
-            
-            self.send_response(command_id, "completed", result={
+                results[agent_id] = self._get_interview_result(agent_id)
+
+            self.server.send_success(command_id, {
                 "interviews_count": len(results),
-                "results": results
+                "results": results,
             })
             print(f"  批量Interview完成: {len(results)} 个Agent")
             return True
-            
         except Exception as e:
             error_msg = str(e)
             print(f"  批量Interview失败: {error_msg}")
-            self.send_response(command_id, "failed", error=error_msg)
+            self.server.send_error(command_id, error_msg)
             return False
-    
+
     def _get_interview_result(self, agent_id: int) -> Dict[str, Any]:
-        """从数据库获取最新的Interview结果"""
+        """SQLite trace 테이블에서 최근 Interview 결과 조회"""
         db_path = os.path.join(self.simulation_dir, "twitter_simulation.db")
-        
-        result = {
-            "agent_id": agent_id,
-            "response": None,
-            "timestamp": None
-        }
-        
+        result = {"agent_id": agent_id, "response": None, "timestamp": None}
+
         if not os.path.exists(db_path):
             return result
-        
+
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-            
-            # 查询最新的Interview记录
             cursor.execute("""
                 SELECT user_id, info, created_at
                 FROM trace
@@ -322,7 +227,7 @@ class IPCHandler:
                 ORDER BY created_at DESC
                 LIMIT 1
             """, (ActionType.INTERVIEW.value, agent_id))
-            
+
             row = cursor.fetchone()
             if row:
                 user_id, info_json, created_at = row
@@ -332,31 +237,29 @@ class IPCHandler:
                     result["timestamp"] = created_at
                 except json.JSONDecodeError:
                     result["response"] = info_json
-            
             conn.close()
-            
         except Exception as e:
             print(f"  读取Interview结果失败: {e}")
-        
+
         return result
-    
+
     async def process_commands(self) -> bool:
         """
-        处理所有待处理命令
-        
+        대기 중인 명령 1개 처리.
+
         Returns:
-            True 表示继续运行，False 表示应该退出
+            True: 계속 실행, False: 종료해야 함
         """
-        command = self.poll_command()
-        if not command:
+        command = self.server.poll_commands()
+        if command is None:
             return True
-        
-        command_id = command.get("command_id")
-        command_type = command.get("command_type")
-        args = command.get("args", {})
-        
-        print(f"\n收到IPC命令: {command_type}, id={command_id}")
-        
+
+        command_id = command.command_id
+        command_type = command.command_type
+        args = command.args
+
+        print(f"\n收到IPC命令: {command_type.value}, id={command_id}")
+
         if command_type == CommandType.INTERVIEW:
             await self.handle_interview(
                 command_id,
@@ -364,21 +267,21 @@ class IPCHandler:
                 args.get("prompt", "")
             )
             return True
-            
+
         elif command_type == CommandType.BATCH_INTERVIEW:
             await self.handle_batch_interview(
                 command_id,
                 args.get("interviews", [])
             )
             return True
-            
+
         elif command_type == CommandType.CLOSE_ENV:
             print("收到关闭环境命令")
-            self.send_response(command_id, "completed", result={"message": "环境即将关闭"})
+            self.server.send_success(command_id, {"message": "环境即将关闭"})
             return False
-        
+
         else:
-            self.send_response(command_id, "failed", error=f"未知命令类型: {command_type}")
+            self.server.send_error(command_id, f"未知命令类型: {command_type}")
             return True
 
 

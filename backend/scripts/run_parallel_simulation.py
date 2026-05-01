@@ -202,25 +202,16 @@ REDDIT_ACTIONS = [
 ]
 
 
-# IPC相关常量
-IPC_COMMANDS_DIR = "ipc_commands"
-IPC_RESPONSES_DIR = "ipc_responses"
-ENV_STATUS_FILE = "env_status.json"
-
-class CommandType:
-    """命令类型常量"""
-    INTERVIEW = "interview"
-    BATCH_INTERVIEW = "batch_interview"
-    CLOSE_ENV = "close_env"
+# 공유 IPC 팩토리: REDIS_URL 설정 시 Redis, 미설정 시 파일 IPC (TODOS #2)
+from app.services.simulation_ipc_factory import make_ipc_server
+from app.services.simulation_ipc import CommandType
 
 
 class ParallelIPCHandler:
     """
-    双平台IPC命令处理器
-    
-    管理两个平台的环境，处理Interview命令
+    双平台IPC命令处理器 — make_ipc_server() 팩토리로 백엔드 선택
     """
-    
+
     def __init__(
         self,
         simulation_dir: str,
@@ -234,68 +225,22 @@ class ParallelIPCHandler:
         self.twitter_agent_graph = twitter_agent_graph
         self.reddit_env = reddit_env
         self.reddit_agent_graph = reddit_agent_graph
-        
-        self.commands_dir = os.path.join(simulation_dir, IPC_COMMANDS_DIR)
-        self.responses_dir = os.path.join(simulation_dir, IPC_RESPONSES_DIR)
-        self.status_file = os.path.join(simulation_dir, ENV_STATUS_FILE)
-        
-        # 确保目录存在
-        os.makedirs(self.commands_dir, exist_ok=True)
-        os.makedirs(self.responses_dir, exist_ok=True)
-    
+        self.server = make_ipc_server(simulation_dir)
+
     def update_status(self, status: str):
-        """更新环境状态"""
-        with open(self.status_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                "status": status,
-                "twitter_available": self.twitter_env is not None,
-                "reddit_available": self.reddit_env is not None,
-                "timestamp": datetime.now().isoformat()
-            }, f, ensure_ascii=False, indent=2)
-    
-    def poll_command(self) -> Optional[Dict[str, Any]]:
-        """轮询获取待处理命令"""
-        if not os.path.exists(self.commands_dir):
-            return None
-        
-        # 获取命令文件（按时间排序）
-        command_files = []
-        for filename in os.listdir(self.commands_dir):
-            if filename.endswith('.json'):
-                filepath = os.path.join(self.commands_dir, filename)
-                command_files.append((filepath, os.path.getmtime(filepath)))
-        
-        command_files.sort(key=lambda x: x[1])
-        
-        for filepath, _ in command_files:
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, OSError):
-                continue
-        
-        return None
-    
+        """환경 상태 갱신 — 양 플랫폼 가용성 포함"""
+        self.server.update_status(
+            status,
+            twitter_available=self.twitter_env is not None,
+            reddit_available=self.reddit_env is not None,
+        )
+
     def send_response(self, command_id: str, status: str, result: Dict = None, error: str = None):
-        """发送响应"""
-        response = {
-            "command_id": command_id,
-            "status": status,
-            "result": result,
-            "error": error,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        response_file = os.path.join(self.responses_dir, f"{command_id}.json")
-        with open(response_file, 'w', encoding='utf-8') as f:
-            json.dump(response, f, ensure_ascii=False, indent=2)
-        
-        # 删除命令文件
-        command_file = os.path.join(self.commands_dir, f"{command_id}.json")
-        try:
-            os.remove(command_file)
-        except OSError:
-            pass
+        """기존 호출자(이 클래스 내부) 호환용 — server.send_success/send_error 로 위임"""
+        if status == "completed":
+            self.server.send_success(command_id, result or {})
+        else:
+            self.server.send_error(command_id, error or "")
     
     def _get_env_and_graph(self, platform: str):
         """
@@ -559,21 +504,21 @@ class ParallelIPCHandler:
     
     async def process_commands(self) -> bool:
         """
-        处理所有待处理命令
-        
+        处理所有待处理命令 — server.poll_commands() 로 위임 (파일/Redis 양쪽 지원)
+
         Returns:
             True 表示继续运行，False 表示应该退出
         """
-        command = self.poll_command()
-        if not command:
+        command = self.server.poll_commands()
+        if command is None:
             return True
-        
-        command_id = command.get("command_id")
-        command_type = command.get("command_type")
-        args = command.get("args", {})
-        
-        print(f"\n收到IPC命令: {command_type}, id={command_id}")
-        
+
+        command_id = command.command_id
+        command_type = command.command_type
+        args = command.args
+
+        print(f"\n收到IPC命令: {command_type.value}, id={command_id}")
+
         if command_type == CommandType.INTERVIEW:
             await self.handle_interview(
                 command_id,
@@ -582,7 +527,7 @@ class ParallelIPCHandler:
                 args.get("platform")
             )
             return True
-            
+
         elif command_type == CommandType.BATCH_INTERVIEW:
             await self.handle_batch_interview(
                 command_id,
@@ -590,14 +535,14 @@ class ParallelIPCHandler:
                 args.get("platform")
             )
             return True
-            
+
         elif command_type == CommandType.CLOSE_ENV:
             print("收到关闭环境命令")
-            self.send_response(command_id, "completed", result={"message": "环境即将关闭"})
+            self.server.send_success(command_id, {"message": "环境即将关闭"})
             return False
-        
+
         else:
-            self.send_response(command_id, "failed", error=f"未知命令类型: {command_type}")
+            self.server.send_error(command_id, f"未知命令类型: {command_type}")
             return True
 
 
