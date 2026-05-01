@@ -9,76 +9,13 @@
       />
 
       <!-- Step 02: Generate Agent Profiles -->
-      <div class="step-card" :class="{ 'active': phase === 1, 'completed': phase > 1 }">
-        <div class="card-header">
-          <div class="step-info">
-            <span class="step-num">02</span>
-            <span class="step-title">에이전트 프로필 생성</span>
-          </div>
-          <div class="step-status">
-            <span v-if="phase > 1" class="badge success">완료</span>
-            <span v-else-if="phase === 1" class="badge processing">{{ prepareProgress }}%</span>
-            <span v-else class="badge pending">대기</span>
-          </div>
-        </div>
-
-        <div class="card-content">
-          <p class="api-note">POST /api/simulation/prepare</p>
-          <p class="description">
-            Using context, automatically calls tools to extract entities and relationships from the knowledge graph, initializes simulated individuals, and assigns them unique behaviors and memories based on reality seeds
-          </p>
-
-          <!-- Profiles Stats -->
-          <div v-if="profiles.length > 0" class="stats-grid">
-            <div class="stat-card">
-              <span class="stat-value">{{ profiles.length }}</span>
-              <span class="stat-label">현재 에이전트 수</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-value">{{ expectedTotal || '-' }}</span>
-              <span class="stat-label">예상 총 에이전트 수</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-value">{{ totalTopicsCount }}</span>
-              <span class="stat-label">씨드 주제 수</span>
-            </div>
-          </div>
-
-          <!-- Profiles List Preview -->
-          <div v-if="profiles.length > 0" class="profiles-preview">
-            <div class="preview-header">
-              <span class="preview-title">생성된 에이전트 프로필</span>
-            </div>
-            <div class="profiles-list">
-              <div 
-                v-for="(profile, idx) in profiles" 
-                :key="idx" 
-                class="profile-card"
-                @click="selectProfile(profile)"
-              >
-                <div class="profile-header">
-                  <span class="profile-realname">{{ profile.username || 'Unknown' }}</span>
-                  <span class="profile-username">@{{ profile.name || `agent_${idx}` }}</span>
-                </div>
-                <div class="profile-meta">
-                  <span class="profile-profession">{{ profile.profession || 'Unknown Profession' }}</span>
-                </div>
-                <p class="profile-bio">{{ profile.bio || 'No bio available' }}</p>
-                <div v-if="profile.interested_topics?.length" class="profile-topics">
-                  <span 
-                    v-for="topic in profile.interested_topics.slice(0, 3)" 
-                    :key="topic" 
-                    class="topic-tag"
-                  >{{ topic }}</span>
-                  <span v-if="profile.interested_topics.length > 3" class="topic-more">
-                    +{{ profile.interested_topics.length - 3 }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <StepProfiles
+        :phase="phase"
+        :prepare-progress="prepareProgress"
+        :profiles="profiles"
+        :expected-total="expectedTotal"
+        @select-profile="selectProfile"
+      />
 
       <!-- Step 03: Generate Dual-Platform Simulation Config -->
       <div class="step-card" :class="{ 'active': phase === 2, 'completed': phase > 2 }">
@@ -518,10 +455,11 @@
 </template>
 
 <script setup>
-import { ref, computed, toRef, watch, onMounted, onBeforeUnmount, onUnmounted, nextTick } from 'vue'
+import { ref, toRef, watch, onMounted, onBeforeUnmount, onUnmounted, nextTick } from 'vue'
 import { usePrepareSimulation } from '../composables/usePrepareSimulation'
 import ProfileDetailModal from './Step2/ProfileDetailModal.vue'
 import StepInstance from './Step2/StepInstance.vue'
+import StepProfiles from './Step2/StepProfiles.vue'
 
 const props = defineProps({
   simulationId: String,  // Passed from parent component
@@ -553,17 +491,8 @@ const {
 
 // UI-only state
 const selectedProfile = ref(null)
-const showProfilesDetail = ref(true)
 const useCustomRounds = ref(false)
 const customMaxRounds = ref(40)
-
-const displayProfiles = computed(() => {
-  return showProfilesDetail.value ? profiles.value : profiles.value.slice(0, 6)
-})
-
-const totalTopicsCount = computed(() => {
-  return profiles.value.reduce((sum, p) => sum + (p.interested_topics?.length || 0), 0)
-})
 
 const getAgentUsername = (agentId) => {
   if (profiles.value && profiles.value.length > agentId && agentId >= 0) {
@@ -583,7 +512,6 @@ const handleStartSimulation = () => {
   emit('next-step', params)
 }
 
-const truncateBio = (bio) => bio.length > 80 ? bio.substring(0, 80) + '...' : bio
 const selectProfile = (profile) => { selectedProfile.value = profile }
 
 // Scroll log to bottom on new entries
