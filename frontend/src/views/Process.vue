@@ -54,114 +54,7 @@
             </div>
             
             <!-- Node/edge detail panel -->
-            <div v-if="selectedItem" class="detail-panel">
-              <div class="detail-panel-header">
-                <span class="detail-title">{{ selectedItem.type === 'node' ? 'Node Details' : 'Relationship' }}</span>
-                <span v-if="selectedItem.type === 'node'" class="detail-badge" :style="{ background: selectedItem.color }">
-                  {{ selectedItem.entityType }}
-                </span>
-                <button class="detail-close" @click="closeDetailPanel">×</button>
-              </div>
-              
-              <!-- Node details -->
-              <div v-if="selectedItem.type === 'node'" class="detail-content">
-                <div class="detail-row">
-                  <span class="detail-label">Name:</span>
-                  <span class="detail-value highlight">{{ selectedItem.data.name }}</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">UUID:</span>
-                  <span class="detail-value uuid">{{ selectedItem.data.uuid }}</span>
-                </div>
-                <div class="detail-row" v-if="selectedItem.data.created_at">
-                  <span class="detail-label">Created:</span>
-                  <span class="detail-value">{{ formatDate(selectedItem.data.created_at) }}</span>
-                </div>
-                
-                <!-- Properties / Attributes -->
-                <div class="detail-section" v-if="selectedItem.data.attributes && Object.keys(selectedItem.data.attributes).length > 0">
-                  <span class="detail-label">Properties:</span>
-                  <div class="properties-list">
-                    <div v-for="(value, key) in selectedItem.data.attributes" :key="key" class="property-item">
-                      <span class="property-key">{{ key }}:</span>
-                      <span class="property-value">{{ value }}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- Summary -->
-                <div class="detail-section" v-if="selectedItem.data.summary">
-                  <span class="detail-label">Summary:</span>
-                  <p class="detail-summary">{{ selectedItem.data.summary }}</p>
-                </div>
-                
-                <!-- Labels -->
-                <div class="detail-row" v-if="selectedItem.data.labels?.length">
-                  <span class="detail-label">Labels:</span>
-                  <div class="detail-labels">
-                    <span v-for="label in selectedItem.data.labels" :key="label" class="label-tag">{{ label }}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Edge details -->
-              <div v-else class="detail-content">
-                <!-- Edge display -->
-                <div class="edge-relation">
-                  <span class="edge-source">{{ selectedItem.data.source_name || selectedItem.data.source_node_name }}</span>
-                  <span class="edge-arrow">→</span>
-                  <span class="edge-type">{{ selectedItem.data.name || selectedItem.data.fact_type || 'RELATED_TO' }}</span>
-                  <span class="edge-arrow">→</span>
-                  <span class="edge-target">{{ selectedItem.data.target_name || selectedItem.data.target_node_name }}</span>
-                </div>
-                
-                <div class="detail-subtitle">관계</div>
-                
-                <div class="detail-row">
-                  <span class="detail-label">UUID:</span>
-                  <span class="detail-value uuid">{{ selectedItem.data.uuid }}</span>
-                </div>
-                <div class="detail-row">
-                  <span class="detail-label">Label:</span>
-                  <span class="detail-value">{{ selectedItem.data.name || selectedItem.data.fact_type || 'RELATED_TO' }}</span>
-                </div>
-                <div class="detail-row" v-if="selectedItem.data.fact_type">
-                  <span class="detail-label">Type:</span>
-                  <span class="detail-value">{{ selectedItem.data.fact_type }}</span>
-                </div>
-                
-                <!-- Fact -->
-                <div class="detail-section" v-if="selectedItem.data.fact">
-                  <span class="detail-label">Fact:</span>
-                  <p class="detail-summary">{{ selectedItem.data.fact }}</p>
-                </div>
-                
-                <!-- Episodes -->
-                <div class="detail-section" v-if="selectedItem.data.episodes?.length">
-                  <span class="detail-label">Episodes:</span>
-                  <div class="episodes-list">
-                    <span v-for="ep in selectedItem.data.episodes" :key="ep" class="episode-tag">{{ ep }}</span>
-                  </div>
-                </div>
-                
-                <div class="detail-row" v-if="selectedItem.data.created_at">
-                  <span class="detail-label">Created:</span>
-                  <span class="detail-value">{{ formatDate(selectedItem.data.created_at) }}</span>
-                </div>
-                <div class="detail-row" v-if="selectedItem.data.valid_at">
-                  <span class="detail-label">Valid From:</span>
-                  <span class="detail-value">{{ formatDate(selectedItem.data.valid_at) }}</span>
-                </div>
-                <div class="detail-row" v-if="selectedItem.data.invalid_at">
-                  <span class="detail-label">Invalid At:</span>
-                  <span class="detail-value">{{ formatDate(selectedItem.data.invalid_at) }}</span>
-                </div>
-                <div class="detail-row" v-if="selectedItem.data.expired_at">
-                  <span class="detail-label">Expired At:</span>
-                  <span class="detail-value">{{ formatDate(selectedItem.data.expired_at) }}</span>
-                </div>
-              </div>
-            </div>
+            <DetailPanel v-if="selectedItem" :item="selectedItem" @close="closeDetailPanel" />
           </div>
           
           <!-- Loading state -->
@@ -418,6 +311,7 @@ import { generateOntology, getProject, buildGraph } from '../api/graph'
 import { getPendingUpload, clearPendingUpload } from '../store/pendingUpload'
 import { useGraphPolling } from '../composables/useGraphPolling'
 import { useGraphRenderer } from '../composables/useGraphRenderer'
+import DetailPanel from '../components/Process/DetailPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -513,23 +407,6 @@ const toggleFullScreen = () => {
 // Close detail panel
 const closeDetailPanel = () => {
   selectedItem.value = null
-}
-
-// Format date
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-'
-  try {
-    const date = new Date(dateStr)
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  } catch {
-    return dateStr
-  }
 }
 
 // Select node
