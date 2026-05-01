@@ -3,7 +3,11 @@
  * This is a custom implementation (not using marked) that handles
  * report-specific formatting like stripping leading ## headings,
  * nested lists, and ordered list numbering across paragraphs.
+ *
+ * Output is sanitized via DOMPurify before return — LLM-generated content
+ * may contain <script>, onclick, etc. which would otherwise execute via v-html.
  */
+import DOMPurify from 'dompurify'
 
 export function renderReportMarkdown(content) {
   if (!content) return ''
@@ -107,5 +111,7 @@ export function renderReportMarkdown(content) {
   }
   html = tokens.join('')
 
-  return html
+  // XSS 방지: DOMPurify 로 위험 태그/속성 제거. data-level/start 같은 정상 속성은
+  // 기본 allowlist 에 포함되므로 보존됨.
+  return DOMPurify.sanitize(html, { ADD_ATTR: ['data-level', 'start'] })
 }

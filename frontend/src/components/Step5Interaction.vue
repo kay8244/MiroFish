@@ -82,6 +82,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import DOMPurify from 'dompurify'
 import { getReport, getAgentLog } from '../api/report'
 import { getSimulationProfilesRealtime } from '../api/simulation'
 import { useChat } from '../composables/useChat'
@@ -219,7 +220,8 @@ const renderMarkdown = (content) => {
   }
   html = tokens.join('')
 
-  return html
+  // XSS 방지: LLM/사용자 콘텐츠가 v-html 로 삽입되므로 위험 태그 제거 (utils/reportMarkdown.js 와 동일)
+  return DOMPurify.sanitize(html, { ADD_ATTR: ['data-level', 'start'] })
 }
 
 // Section collapse toggle
