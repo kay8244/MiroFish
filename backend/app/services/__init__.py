@@ -36,6 +36,7 @@ from .simulation_ipc import (
     CommandType,
     CommandStatus
 )
+from .simulation_ipc_factory import make_ipc_client, make_ipc_server
 
 __all__ = [
     'OntologyGenerator', 
@@ -69,5 +70,7 @@ __all__ = [
     'IPCResponse',
     'CommandType',
     'CommandStatus',
+    'make_ipc_client',
+    'make_ipc_server',
 ]
 

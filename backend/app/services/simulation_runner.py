@@ -22,7 +22,8 @@ from queue import Queue
 from ..config import Config
 from ..utils.logger import get_logger
 from .graphiti_graph_memory_updater import GraphitiGraphMemoryManager
-from .simulation_ipc import SimulationIPCClient, CommandType, IPCResponse
+from .simulation_ipc import CommandType, IPCResponse
+from .simulation_ipc_factory import make_ipc_client
 
 logger = get_logger('mirofish.simulation_runner')
 
@@ -1496,7 +1497,7 @@ class SimulationRunner:
         if not os.path.exists(sim_dir):
             return False
 
-        ipc_client = SimulationIPCClient(sim_dir)
+        ipc_client = make_ipc_client(sim_dir)
         return ipc_client.check_env_alive()
 
     @classmethod
@@ -1568,7 +1569,7 @@ class SimulationRunner:
         if not os.path.exists(sim_dir):
             raise ValueError(f"시뮬레이션이 존재하지 않습니다: {simulation_id}")
 
-        ipc_client = SimulationIPCClient(sim_dir)
+        ipc_client = make_ipc_client(sim_dir)
 
         if not ipc_client.check_env_alive():
             raise ValueError(f"시뮬레이션 환경이 실행 중이 아니거나 종료됨, Interview 실행 불가: {simulation_id}")
@@ -1630,7 +1631,7 @@ class SimulationRunner:
         if not os.path.exists(sim_dir):
             raise ValueError(f"시뮬레이션이 존재하지 않습니다: {simulation_id}")
 
-        ipc_client = SimulationIPCClient(sim_dir)
+        ipc_client = make_ipc_client(sim_dir)
 
         if not ipc_client.check_env_alive():
             raise ValueError(f"시뮬레이션 환경이 실행 중이 아니거나 종료됨, Interview 실행 불가: {simulation_id}")
@@ -1740,7 +1741,7 @@ class SimulationRunner:
         if not os.path.exists(sim_dir):
             raise ValueError(f"시뮬레이션이 존재하지 않습니다: {simulation_id}")
         
-        ipc_client = SimulationIPCClient(sim_dir)
+        ipc_client = make_ipc_client(sim_dir)
         
         if not ipc_client.check_env_alive():
             return {

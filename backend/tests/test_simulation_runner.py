@@ -505,7 +505,7 @@ class TestCheckEnvAlive:
             def check_env_alive(self):
                 return True
 
-        monkeypatch.setattr(sr_mod, "SimulationIPCClient", _FakeIPC)
+        monkeypatch.setattr(sr_mod, "make_ipc_client",_FakeIPC)
         assert SimulationRunner.check_env_alive("sim_x") is True
 
 
@@ -549,7 +549,7 @@ class _IPCResponse:
 
 
 class _IPCClientFactory:
-    """모듈 레벨 SimulationIPCClient 모킹 헬퍼."""
+    """모듈 레벨 make_ipc_client 모킹 헬퍼."""
     def __init__(self, alive=True, response=None):
         self.alive = alive
         self.response = response or _IPCResponse(result={"text": "ok"})
@@ -583,7 +583,7 @@ class TestInterviewAgent:
         sim_dir = tmp_path / "sim_x"
         sim_dir.mkdir()
         ipc = _IPCClientFactory(alive=False)
-        monkeypatch.setattr(sr_mod, "SimulationIPCClient", ipc)
+        monkeypatch.setattr(sr_mod, "make_ipc_client",ipc)
         with pytest.raises(ValueError, match="실행 중이 아니"):
             SimulationRunner.interview_agent("sim_x", agent_id=1, prompt="?")
 
@@ -591,7 +591,7 @@ class TestInterviewAgent:
         sim_dir = tmp_path / "sim_x"
         sim_dir.mkdir()
         ipc = _IPCClientFactory(response=_IPCResponse(result={"answer": "yes"}))
-        monkeypatch.setattr(sr_mod, "SimulationIPCClient", ipc)
+        monkeypatch.setattr(sr_mod, "make_ipc_client",ipc)
         result = SimulationRunner.interview_agent(
             "sim_x", agent_id=42, prompt="hello", platform="reddit",
         )
@@ -606,7 +606,7 @@ class TestInterviewAgent:
         ipc = _IPCClientFactory(
             response=_IPCResponse(status="failed", error="agent not found")
         )
-        monkeypatch.setattr(sr_mod, "SimulationIPCClient", ipc)
+        monkeypatch.setattr(sr_mod, "make_ipc_client",ipc)
         result = SimulationRunner.interview_agent(
             "sim_x", agent_id=99, prompt="?",
         )
@@ -619,7 +619,7 @@ class TestInterviewAgentsBatch:
         sim_dir = tmp_path / "sim_x"
         sim_dir.mkdir()
         ipc = _IPCClientFactory(response=_IPCResponse(result={"all": "good"}))
-        monkeypatch.setattr(sr_mod, "SimulationIPCClient", ipc)
+        monkeypatch.setattr(sr_mod, "make_ipc_client",ipc)
         result = SimulationRunner.interview_agents_batch(
             "sim_x",
             interviews=[{"agent_id": 1, "prompt": "q"}, {"agent_id": 2, "prompt": "q"}],
@@ -653,7 +653,7 @@ class TestInterviewAllAgents:
             ]})
         )
         ipc = _IPCClientFactory()
-        monkeypatch.setattr(sr_mod, "SimulationIPCClient", ipc)
+        monkeypatch.setattr(sr_mod, "make_ipc_client",ipc)
         result = SimulationRunner.interview_all_agents("sim_x", prompt="q")
         # batch 가 호출됐고 3개 interview 전달됨
         assert ipc.calls[0][0] == "batch"
@@ -673,7 +673,7 @@ class TestCloseSimulationEnv:
         sim_dir = tmp_path / "sim_x"
         sim_dir.mkdir()
         ipc = _IPCClientFactory(alive=False)
-        monkeypatch.setattr(sr_mod, "SimulationIPCClient", ipc)
+        monkeypatch.setattr(sr_mod, "make_ipc_client",ipc)
         result = SimulationRunner.close_simulation_env("sim_x")
         assert result["success"] is True
         assert "이미 종료" in result["message"]
@@ -682,7 +682,7 @@ class TestCloseSimulationEnv:
         sim_dir = tmp_path / "sim_x"
         sim_dir.mkdir()
         ipc = _IPCClientFactory(response=_IPCResponse(result={"closed": True}))
-        monkeypatch.setattr(sr_mod, "SimulationIPCClient", ipc)
+        monkeypatch.setattr(sr_mod, "make_ipc_client",ipc)
         result = SimulationRunner.close_simulation_env("sim_x", timeout=5.0)
         assert result["success"] is True
         assert result["result"] == {"closed": True}
@@ -700,7 +700,7 @@ class TestCloseSimulationEnv:
             def send_close_env(self, **kw):
                 raise TimeoutError("...")
 
-        monkeypatch.setattr(sr_mod, "SimulationIPCClient", _IPCTimeout)
+        monkeypatch.setattr(sr_mod, "make_ipc_client",_IPCTimeout)
         result = SimulationRunner.close_simulation_env("sim_x")
         assert result["success"] is True
         assert "타임아웃" in result["message"]
