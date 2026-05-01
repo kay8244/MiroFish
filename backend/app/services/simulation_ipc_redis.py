@@ -193,6 +193,20 @@ class RedisSimulationIPCClient:
         status = self._redis.hget(_status_key(self.sim_id), "status")
         return status == "alive"
 
+    def get_env_status(self) -> Dict[str, Any]:
+        """
+        status hash 의 전체 필드 반환 (없으면 기본값).
+        bool 필드는 "true"/"false" 문자열 → bool 로 변환.
+        """
+        raw = self._redis.hgetall(_status_key(self.sim_id))
+        if not raw:
+            return {"status": "stopped", "timestamp": None}
+        result: Dict[str, Any] = dict(raw)
+        for key in ("twitter_available", "reddit_available"):
+            if key in result:
+                result[key] = result[key] == "true"
+        return result
+
 
 class RedisSimulationIPCServer:
     """
@@ -214,14 +228,14 @@ class RedisSimulationIPCServer:
     def start(self) -> None:
         """서버 실행 상태 표시 — status hash 갱신."""
         self._running = True
-        self._update_env_status("alive")
+        self.update_status("alive")
 
     def stop(self) -> None:
         """서버 중지 상태 표시 — status hash 갱신."""
         self._running = False
-        self._update_env_status("stopped")
+        self.update_status("stopped")
 
-    def _update_env_status(
+    def update_status(
         self,
         status: str,
         twitter_available: Optional[bool] = None,
@@ -239,18 +253,8 @@ class RedisSimulationIPCServer:
         # mapping 기반 hset (redis-py 5+ 시그니처)
         self._redis.hset(_status_key(self.sim_id), mapping=fields)
 
-    def update_status_with_platforms(
-        self,
-        status: str,
-        twitter_available: bool,
-        reddit_available: bool,
-    ) -> None:
-        """플랫폼 가용성 포함 status 갱신 (parallel sim 스크립트용)."""
-        self._update_env_status(
-            status=status,
-            twitter_available=twitter_available,
-            reddit_available=reddit_available,
-        )
+    # 기존 호출자(테스트) 호환용 별칭
+    update_status_with_platforms = update_status
 
     def poll_commands(self) -> Optional[IPCCommand]:
         """

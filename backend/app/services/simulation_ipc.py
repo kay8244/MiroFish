@@ -292,16 +292,20 @@ class SimulationIPCClient:
 
         env_status.json 파일 확인을 통해 판단
         """
+        return self.get_env_status().get("status") == "alive"
+
+    def get_env_status(self) -> Dict[str, Any]:
+        """
+        env_status.json 의 전체 필드 반환 (없으면 기본값).
+        """
         status_file = os.path.join(self.simulation_dir, "env_status.json")
         if not os.path.exists(status_file):
-            return False
-
+            return {"status": "stopped", "timestamp": None}
         try:
             with open(status_file, 'r', encoding='utf-8') as f:
-                status = json.load(f)
-            return status.get("status") == "alive"
+                return json.load(f)
         except (json.JSONDecodeError, OSError):
-            return False
+            return {"status": "stopped", "timestamp": None}
 
 
 class SimulationIPCServer:
@@ -335,20 +339,50 @@ class SimulationIPCServer:
     def start(self):
         """서버를 실행 상태로 표시"""
         self._running = True
-        self._update_env_status("alive")
+        self.update_status("alive")
 
     def stop(self):
         """서버를 중지 상태로 표시"""
         self._running = False
-        self._update_env_status("stopped")
+        self.update_status("stopped")
 
-    def _update_env_status(self, status: str):
-        """환경 상태 파일 원자적 업데이트"""
+    def update_status(
+        self,
+        status: str,
+        twitter_available: Optional[bool] = None,
+        reddit_available: Optional[bool] = None,
+    ) -> None:
+        """
+        환경 상태 파일 원자적 업데이트.
+
+        Args:
+            status: "running", "alive", "stopped" 등
+            twitter_available: 양 플랫폼 시뮬레이션 시 Twitter 가용 여부
+            reddit_available: 양 플랫폼 시뮬레이션 시 Reddit 가용 여부
+        """
         status_file = os.path.join(self.simulation_dir, "env_status.json")
-        _atomic_write_json(status_file, {
+        data: Dict[str, Any] = {
             "status": status,
-            "timestamp": datetime.now().isoformat()
-        })
+            "timestamp": datetime.now().isoformat(),
+        }
+        if twitter_available is not None:
+            data["twitter_available"] = twitter_available
+        if reddit_available is not None:
+            data["reddit_available"] = reddit_available
+        _atomic_write_json(status_file, data)
+
+    def get_env_status(self) -> Dict[str, Any]:
+        """
+        env_status.json 의 전체 필드 반환 (없으면 기본값).
+        """
+        status_file = os.path.join(self.simulation_dir, "env_status.json")
+        if not os.path.exists(status_file):
+            return {"status": "stopped", "timestamp": None}
+        try:
+            with open(status_file, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {"status": "stopped", "timestamp": None}
 
     def poll_commands(self) -> Optional[IPCCommand]:
         """
