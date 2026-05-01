@@ -71,3 +71,6 @@ backend/pipeline.sqlite3-shm
 
 # QA screenshots (local only)
 frontend/.qa/
+
+# 원본 입력 자료 (outer repo 의 큐레이션된 seed pack 과 별도)
+seed_documents/
