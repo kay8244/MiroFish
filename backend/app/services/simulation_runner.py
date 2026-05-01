@@ -1503,7 +1503,7 @@ class SimulationRunner:
     @classmethod
     def get_env_status_detail(cls, simulation_id: str) -> Dict[str, Any]:
         """
-        시뮬레이션 환경의 상세 상태 정보 조회
+        시뮬레이션 환경의 상세 상태 정보 조회 — IPC 백엔드 (파일/Redis) 위임.
 
         Args:
             simulation_id: 시뮬레이션 ID
@@ -1512,29 +1512,27 @@ class SimulationRunner:
             상태 상세 딕셔너리, status, twitter_available, reddit_available, timestamp 포함
         """
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
-        status_file = os.path.join(sim_dir, "env_status.json")
-        
         default_status = {
             "status": "stopped",
             "twitter_available": False,
             "reddit_available": False,
-            "timestamp": None
+            "timestamp": None,
         }
-        
-        if not os.path.exists(status_file):
+        if not os.path.exists(sim_dir):
             return default_status
-        
+
+        ipc_client = make_ipc_client(sim_dir)
         try:
-            with open(status_file, 'r', encoding='utf-8') as f:
-                status = json.load(f)
-            return {
-                "status": status.get("status", "stopped"),
-                "twitter_available": status.get("twitter_available", False),
-                "reddit_available": status.get("reddit_available", False),
-                "timestamp": status.get("timestamp")
-            }
-        except (json.JSONDecodeError, OSError):
+            status = ipc_client.get_env_status()
+        except Exception:
             return default_status
+
+        return {
+            "status": status.get("status", "stopped"),
+            "twitter_available": bool(status.get("twitter_available", False)),
+            "reddit_available": bool(status.get("reddit_available", False)),
+            "timestamp": status.get("timestamp"),
+        }
 
     @classmethod
     def interview_agent(
