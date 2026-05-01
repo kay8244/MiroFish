@@ -7,6 +7,7 @@ Twitter와 Reddit 양대 플랫폼 병렬 시뮬레이션 관리
 import os
 import json
 import shutil
+from collections import OrderedDict
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -158,12 +159,25 @@ class SimulationManager:
         '../../uploads/simulations'
     )
 
+    # 메모리 캐시 크기 한도 (LRU 축출). 분기당 수백 run 누적되어도 메모리 누수
+    # 없이 최근 사용된 N개만 유지. 환경변수로 override 가능.
+    MAX_CACHE_SIZE = int(os.environ.get('SIMULATION_CACHE_SIZE', '128'))
+
     def __init__(self):
         # 디렉토리 존재 확인
         os.makedirs(self.SIMULATION_DATA_DIR, exist_ok=True)
 
-        # 메모리 내 시뮬레이션 상태 캐시
-        self._simulations: Dict[str, SimulationState] = {}
+        # 메모리 내 시뮬레이션 상태 캐시 — OrderedDict 으로 LRU 축출
+        self._simulations: "OrderedDict[str, SimulationState]" = OrderedDict()
+
+    def _cache_set(self, simulation_id: str, state: SimulationState) -> None:
+        """캐시에 등록 + LRU 축출 (단일 진입점)."""
+        if simulation_id in self._simulations:
+            self._simulations.move_to_end(simulation_id)
+        self._simulations[simulation_id] = state
+        # 디스크 영속화 후 캐시는 LRU 한도만 유지 — 메모리 누수 방어선.
+        while len(self._simulations) > self.MAX_CACHE_SIZE:
+            self._simulations.popitem(last=False)
 
     def _get_simulation_dir(self, simulation_id: str) -> str:
         """시뮬레이션 데이터 디렉토리 가져오기"""
@@ -180,11 +194,13 @@ class SimulationManager:
 
         _atomic_write_json(state_file, state.to_dict())
 
-        self._simulations[state.simulation_id] = state
+        self._cache_set(state.simulation_id, state)
 
     def _load_simulation_state(self, simulation_id: str) -> Optional[SimulationState]:
         """파일에서 시뮬레이션 상태 불러오기"""
         if simulation_id in self._simulations:
+            # LRU: 캐시 히트 시 가장 최근 사용으로 갱신
+            self._simulations.move_to_end(simulation_id)
             return self._simulations[simulation_id]
 
         sim_dir = self._get_simulation_dir(simulation_id)
@@ -217,7 +233,7 @@ class SimulationManager:
             error=data.get("error"),
         )
 
-        self._simulations[simulation_id] = state
+        self._cache_set(simulation_id, state)
         return state
 
     def create_simulation(

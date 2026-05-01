@@ -134,6 +134,57 @@ class TestManagerInit:
         assert isolated_manager._simulations == {}
 
 
+class TestCacheLRU:
+    def test_save_then_load_via_cache(self, isolated_manager):
+        # 별도 alias — 다른 라우트에서 cache hit 검증
+        s = SimulationState(simulation_id="sim_lru0", project_id="p", graph_id="g")
+        isolated_manager._save_simulation_state(s)
+        assert "sim_lru0" in isolated_manager._simulations
+
+    def test_evicts_oldest_when_over_max(self, isolated_manager, monkeypatch):
+        """캐시 한도를 넘으면 가장 오래 사용 안 된 항목을 축출."""
+        # 작은 한도로 쉽게 트리거
+        monkeypatch.setattr(SimulationManager, "MAX_CACHE_SIZE", 3)
+        for i in range(5):
+            s = SimulationState(simulation_id=f"sim_{i}", project_id="p", graph_id="g")
+            isolated_manager._save_simulation_state(s)
+        # 캐시는 3개만 유지 — 가장 최근 sim_2/sim_3/sim_4
+        assert len(isolated_manager._simulations) == 3
+        assert "sim_0" not in isolated_manager._simulations
+        assert "sim_1" not in isolated_manager._simulations
+        assert {"sim_2", "sim_3", "sim_4"} == set(isolated_manager._simulations.keys())
+
+    def test_get_promotes_to_most_recent(self, isolated_manager, monkeypatch):
+        """캐시 히트 시 LRU 갱신 — 다음 축출 대상에서 제외."""
+        monkeypatch.setattr(SimulationManager, "MAX_CACHE_SIZE", 3)
+        for i in range(3):
+            s = SimulationState(simulation_id=f"sim_{i}", project_id="p", graph_id="g")
+            isolated_manager._save_simulation_state(s)
+        # sim_0 을 다시 읽어 LRU 의 최신으로 승격
+        isolated_manager.get_simulation("sim_0")
+        # 새 항목 추가 → sim_1 이 가장 오래된 항목으로 축출
+        s_new = SimulationState(simulation_id="sim_new", project_id="p", graph_id="g")
+        isolated_manager._save_simulation_state(s_new)
+        assert "sim_0" in isolated_manager._simulations
+        assert "sim_1" not in isolated_manager._simulations
+        assert "sim_new" in isolated_manager._simulations
+
+    def test_disk_persisted_after_eviction(self, isolated_manager, monkeypatch, tmp_path):
+        """축출 후에도 파일이 살아있어 다음 조회 시 디스크에서 복원."""
+        monkeypatch.setattr(SimulationManager, "MAX_CACHE_SIZE", 1)
+        s_a = SimulationState(simulation_id="sim_A", project_id="p", graph_id="g")
+        isolated_manager._save_simulation_state(s_a)
+        s_b = SimulationState(simulation_id="sim_B", project_id="p", graph_id="g")
+        isolated_manager._save_simulation_state(s_b)
+        # sim_A 는 캐시에서 축출됐지만 디스크에 있음
+        assert "sim_A" not in isolated_manager._simulations
+        assert (tmp_path / "sim_A" / "state.json").exists()
+        # 다시 조회 → 디스크에서 복원
+        loaded = isolated_manager.get_simulation("sim_A")
+        assert loaded is not None
+        assert loaded.project_id == "p"
+
+
 class TestSaveLoadState:
     def test_save_then_load_via_cache(self, isolated_manager):
         s = SimulationState(simulation_id="sim_x", project_id="p", graph_id="g")
