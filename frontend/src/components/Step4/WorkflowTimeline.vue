@@ -482,4 +482,4 @@ const getActionLabel = (action) => {
 }
 </script>
 
-<style scoped src="../Step4Report.styles.css"></style>
+<style scoped src="./_workflow-timeline.css"></style>
