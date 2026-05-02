@@ -15,11 +15,18 @@ from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from openai import OpenAI
 from ..config import Config
-from ..utils.zep_client import create_zep_client
+from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
-from .zep_entity_reader import EntityNode, ZepEntityReader
+from .graphiti_entity_reader import EntityNode, GraphitiEntityReader
+
+# Legacy Zep Cloud enrichment은 optional extra(`uv sync --extra zep`)로 설치한
+# 경우에만 활성. 평상시(Graphiti 기본 경로)에는 create_zep_client=None이 되고
+# `_search_zep_for_entity`는 no-op로 빈 dict 반환.
+try:
+    from ..utils.zep_client_legacy import create_zep_client  # type: ignore
+except ImportError:  # zep-cloud 미설치 환경(기본) — Graphiti 단독 경로
+    create_zep_client = None  # type: ignore
 
 logger = get_logger('mirofish.oasis_profile')
 
@@ -190,22 +197,26 @@ class OasisProfileGenerator:
         
         if not self.api_key:
             raise ValueError("LLM_API_KEY가 설정되지 않았습니다")
-        
-        self.client = OpenAI(
+
+        # Phase 7: LLMClient 경유 — LLM_PROVIDER env로 OpenAI/Anthropic 자동 전환.
+        # 페르소나 생성은 OpenAI chat.completions 직접 호출 대신 통합 래퍼 사용.
+        self.llm_client = LLMClient(
             api_key=self.api_key,
-            base_url=self.base_url
+            base_url=self.base_url,
+            model=self.model_name,
         )
         
-        # Zep 클라이언트: 풍부한 컨텍스트 검색용
+        # Zep 클라이언트: legacy enrichment 경로 (optional extra 설치 + ZEP_API_KEY
+        # 설정 시에만 활성). Graphiti 기본 경로에서는 zep_client=None → 검색 no-op.
         self.zep_api_key = zep_api_key or Config.ZEP_API_KEY
         self.zep_client = None
         self.graph_id = graph_id
-        
-        if self.zep_api_key:
+
+        if self.zep_api_key and create_zep_client is not None:
             try:
                 self.zep_client = create_zep_client(api_key=self.zep_api_key)
             except Exception as e:
-                logger.warning(f"Zep 클라이언트 초기화 실패: {e}")
+                logger.warning(f"Zep 클라이언트 초기화 실패(legacy enrichment 비활성): {e}")
     
     def generate_profile_from_entity(
         self, 
@@ -538,26 +549,22 @@ class OasisProfileGenerator:
         max_attempts = 3
         last_error = None
         
+        messages = [
+            {"role": "system", "content": self._get_system_prompt(is_individual)},
+            {"role": "user", "content": prompt},
+        ]
+
         for attempt in range(max_attempts):
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {"role": "system", "content": self._get_system_prompt(is_individual)},
-                        {"role": "user", "content": prompt}
-                    ],
+                # LLMClient.chat() — provider-agnostic. JSON object mode 지정 시
+                # Anthropic 경로는 system prompt에 JSON-only 지시 자동 주입.
+                # finish_reason은 provider별로 노출 방식이 달라 생략. 파싱 실패 시
+                # _fix_truncated_json / _try_fix_json 경로가 잘림/포맷 오류 흡수.
+                content = self.llm_client.chat(
+                    messages=messages,
+                    temperature=0.7 - (attempt * 0.1),  # 재시도마다 온도 낮춤
                     response_format={"type": "json_object"},
-                    temperature=0.7 - (attempt * 0.1)  # 재시도마다 온도 낮춤
-                    # max_tokens 미설정, LLM이 자유롭게 생성
                 )
-                
-                content = response.choices[0].message.content
-                
-                # 잘림 여부 확인（finish_reason이 'stop'이 아닌 경우）
-                finish_reason = response.choices[0].finish_reason
-                if finish_reason == 'length':
-                    logger.warning(f"LLM 출력이 잘림 (attempt {attempt+1}), 수정 시도...")
-                    content = self._fix_truncated_json(content)
                 
                 # JSON 파싱 시도
                 try:

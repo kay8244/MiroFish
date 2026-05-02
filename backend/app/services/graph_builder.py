@@ -1,27 +1,113 @@
-"""
-그래프 구축 서비스
-인터페이스 2: Zep API를 사용한 Standalone Graph 구축
+"""Graphiti 기반 그래프 빌더 (Phase 2 도입 / Phase 6 canonical 승격).
+
+Zep Cloud SDK 기반 구현은 `graph_builder_zep_legacy.py`로 이동. 기본 백엔드는
+Graphiti(Neo4j). API 시그니처는 기존 `GraphBuilderService`를 그대로 유지.
+
+호환 API (그대로 유지):
+  - build_graph_async(text, ontology, graph_name, chunk_size, chunk_overlap,
+      batch_size=unused_legacy_param) → task_id
+  - TaskManager를 통한 progress 추적
+  - 완료 시 반환 결과: {'graph_id', 'graph_info', 'chunks_processed'}
+
+Graphiti 전환 핵심:
+  - graph_id는 Graphiti `group_id`로 사용 (기존 Zep `graph_id`와 동일 네이밍 규칙
+    `mirofish_<uuid16>`).
+  - 별도 create_graph / set_ontology 호출 없음 — 첫 add_episode 시 자동 생성,
+    entity_types/edge_types dict를 매 add_episode에 전달.
+  - batch_size는 legacy 파라미터로 받되 무시. Graphiti는 SEMAPHORE_LIMIT(=10)로
+    내부 동시성 제어.
+  - _wait_for_episodes 폴링 루프 제거 — await add_episode가 완료 보장.
 """
 
+from __future__ import annotations
+
+import asyncio
 import os
-import uuid
-import time
 import threading
-from typing import Dict, Any, List, Optional, Callable
+import traceback
+import uuid
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional
 
-from zep_cloud import EpisodeData, EntityEdgeSourceTarget
+from pydantic import BaseModel, Field
 
-from ..config import Config
-from ..utils.zep_client import create_zep_client
+# Fix G0: graphiti_core helpers.py 가 모듈 로드 시점에 SEMAPHORE_LIMIT 을 읽음
+# (default 20). 기본값은 한 add_episode 안의 nested LLM 호출 5+ 가 한꺼번에
+# burst → Anthropic Tier 1 분당 토큰 한도 (450K/min) 즉시 초과. 2로 직렬화하면
+# nested 호출이 throttle 되어 rate limit 안 부딪힘. graphiti_client import 전에
+# 반드시 set 되어야 효과 있음 (helpers.py 가 import time 에 읽음).
+os.environ.setdefault('SEMAPHORE_LIMIT', '2')
+
 from ..models.task import TaskManager, TaskStatus
-from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
+from ..utils.graphiti_client import GraphitiConfig, create_graphiti, neo4j_driver
+from ..utils.graphiti_paging import fetch_all_edges, fetch_all_nodes
+from ..utils.logger import get_logger
 from .text_processor import TextProcessor
+
+logger = get_logger('mirofish.graph_builder')
+
+
+_RESERVED_ATTR_NAMES = {
+    'uuid', 'name', 'group_id', 'name_embedding',
+    'summary', 'created_at', 'fact', 'fact_embedding',
+}
+
+
+def _safe_attr_name(attr_name: str) -> str:
+    """Graphiti/Neo4j 예약 속성명 회피."""
+    return f'entity_{attr_name}' if attr_name.lower() in _RESERVED_ATTR_NAMES else attr_name
+
+
+def build_entity_types(ontology: Dict[str, Any]) -> Dict[str, type]:
+    """온톨로지 dict에서 {name: pydantic class} 매핑 생성 (entity 전용)."""
+    entity_types: Dict[str, type] = {}
+    for entity_def in ontology.get('entity_types', []) or []:
+        name = entity_def['name']
+        description = entity_def.get('description') or f'A {name} entity.'
+
+        attrs: Dict[str, Any] = {'__doc__': description}
+        annotations: Dict[str, Any] = {}
+        for attr_def in entity_def.get('attributes', []) or []:
+            attr_name = _safe_attr_name(attr_def['name'])
+            attr_desc = attr_def.get('description') or attr_name
+            attrs[attr_name] = Field(default=None, description=attr_desc)
+            annotations[attr_name] = Optional[str]
+        attrs['__annotations__'] = annotations
+        entity_class = type(name, (BaseModel,), attrs)
+        entity_class.__doc__ = description
+        entity_types[name] = entity_class
+    return entity_types
+
+
+def build_edge_types(ontology: Dict[str, Any]) -> Dict[str, type]:
+    """온톨로지 dict에서 {name: pydantic class} 매핑 생성 (edge 전용).
+
+    Graphiti는 edge source/target 제약을 별도 edge_type_map으로 받는다 (선택적).
+    현재 build은 edge attribute만 매핑하고, source_targets 제약은 LLM이 자연어
+    context로 판단하도록 둔다. Phase 3 이후 필요 시 edge_type_map 추가.
+    """
+    edge_types: Dict[str, type] = {}
+    for edge_def in ontology.get('edge_types', []) or []:
+        name = edge_def['name']
+        description = edge_def.get('description') or f'A {name} relationship.'
+
+        attrs: Dict[str, Any] = {'__doc__': description}
+        annotations: Dict[str, Any] = {}
+        for attr_def in edge_def.get('attributes', []) or []:
+            attr_name = _safe_attr_name(attr_def['name'])
+            attr_desc = attr_def.get('description') or attr_name
+            attrs[attr_name] = Field(default=None, description=attr_desc)
+            annotations[attr_name] = Optional[str]
+        attrs['__annotations__'] = annotations
+        edge_class = type(name, (BaseModel,), attrs)
+        edge_class.__doc__ = description
+        edge_types[name] = edge_class
+    return edge_types
 
 
 @dataclass
 class GraphInfo:
-    """그래프 정보"""
     graph_id: str
     node_count: int
     edge_count: int
@@ -29,71 +115,66 @@ class GraphInfo:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "graph_id": self.graph_id,
-            "node_count": self.node_count,
-            "edge_count": self.edge_count,
-            "entity_types": self.entity_types,
+            'graph_id': self.graph_id,
+            'node_count': self.node_count,
+            'edge_count': self.edge_count,
+            'entity_types': self.entity_types,
         }
 
 
 class GraphBuilderService:
-    """
-    그래프 구축 서비스
-    Zep API를 호출하여 지식 그래프를 구축하는 역할
-    """
+    """Graphiti + Neo4j 기반 그래프 빌더 (canonical)."""
 
-    def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or Config.ZEP_API_KEY
-        if not self.api_key:
-            raise ValueError("ZEP_API_KEY 가 설정되지 않았습니다")
-
-        self.client = create_zep_client(api_key=self.api_key)
+    def __init__(self, graphiti_config: Optional[GraphitiConfig] = None):
+        self.graphiti_config = graphiti_config or GraphitiConfig.from_env()
         self.task_manager = TaskManager()
+
+    # ── 공개 API (legacy 호환) ─────────────────────────────────
 
     def build_graph_async(
         self,
         text: str,
         ontology: Dict[str, Any],
-        graph_name: str = "MiroFish Graph",
+        graph_name: str = 'MiroFish Graph',
         chunk_size: int = 500,
         chunk_overlap: int = 50,
-        batch_size: int = 3
+        batch_size: int = 3,  # legacy, ignored
+        existing_graph_id: Optional[str] = None,
+        skip_chunk_indices: Optional[List[int]] = None,
+        chunk_completed_callback: Optional[Callable[[int, str], None]] = None,
     ) -> str:
-        """
-        비동기 그래프 구축
+        """비동기 그래프 구축 시작. 호출 즉시 task_id 반환.
 
-        Args:
-            text: 입력 텍스트
-            ontology: 온톨로지 정의 (인터페이스 1의 출력)
-            graph_name: 그래프 이름
-            chunk_size: 텍스트 청크 크기
-            chunk_overlap: 청크 겹침 크기
-            batch_size: 배치당 전송할 청크 수
-
-        Returns:
-            태스크 ID
+        Fix G4 추가 파라미터:
+            existing_graph_id: 재시도 시 기존 graph_id 재사용 (None 이면 새로 생성)
+            skip_chunk_indices: 이미 처리된 chunk 인덱스 (재시도 시 스킵)
+            chunk_completed_callback: chunk 처리 완료 시 호출 (idx, graph_id) →
+                graph_adapter 가 progress 영속화에 사용
         """
-        # 태스크 생성
         task_id = self.task_manager.create_task(
-            task_type="graph_build",
+            task_type='graph_build',
             metadata={
-                "graph_name": graph_name,
-                "chunk_size": chunk_size,
-                "text_length": len(text),
-            }
+                'graph_name': graph_name,
+                'chunk_size': chunk_size,
+                'text_length': len(text),
+                'backend': 'graphiti',
+            },
         )
-
-        # 백그라운드 스레드에서 구축 실행
-        thread = threading.Thread(
-            target=self._build_graph_worker,
-            args=(task_id, text, ontology, graph_name, chunk_size, chunk_overlap, batch_size)
+        t = threading.Thread(
+            target=self._worker,
+            args=(
+                task_id, text, ontology, graph_name, chunk_size, chunk_overlap,
+                existing_graph_id, skip_chunk_indices, chunk_completed_callback,
+            ),
+            name=f'graph-build-{task_id[:8]}',
+            daemon=True,
         )
-        thread.daemon = True
-        thread.start()
-
+        t.start()
         return task_id
 
-    def _build_graph_worker(
+    # ── 내부 구현 ─────────────────────────────────────────────
+
+    def _worker(
         self,
         task_id: str,
         text: str,
@@ -101,399 +182,284 @@ class GraphBuilderService:
         graph_name: str,
         chunk_size: int,
         chunk_overlap: int,
-        batch_size: int
-    ):
-        """그래프 구축 워커 스레드"""
+        existing_graph_id: Optional[str] = None,
+        skip_chunk_indices: Optional[List[int]] = None,
+        chunk_completed_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> None:
+        """TaskManager thread worker. asyncio 루프는 여기서 띄운다."""
         try:
             self.task_manager.update_task(
                 task_id,
                 status=TaskStatus.PROCESSING,
                 progress=5,
-                message="그래프 구축 시작..."
+                message='Graphiti 그래프 구축 시작...',
             )
-
-            # 1. 그래프 생성
-            graph_id = self.create_graph(graph_name)
-            self.task_manager.update_task(
-                task_id,
-                progress=10,
-                message=f"그래프 생성됨: {graph_id}"
-            )
-
-            # 2. 온톨로지 설정
-            self.set_ontology(graph_id, ontology)
-            self.task_manager.update_task(
-                task_id,
-                progress=15,
-                message="온톨로지 설정 완료"
-            )
-
-            # 3. 텍스트 청킹
-            chunks = TextProcessor.split_text(text, chunk_size, chunk_overlap)
-            total_chunks = len(chunks)
-            self.task_manager.update_task(
-                task_id,
-                progress=20,
-                message=f"텍스트가 {total_chunks}개 청크로 분할됨"
-            )
-
-            # 4. 배치별 데이터 전송
-            episode_uuids = self.add_text_batches(
-                graph_id, chunks, batch_size,
-                lambda msg, prog: self.task_manager.update_task(
-                    task_id,
-                    progress=20 + int(prog * 0.4),  # 20-60%
-                    message=msg
+            result = asyncio.run(
+                self._build_async(
+                    task_id, text, ontology, graph_name, chunk_size, chunk_overlap,
+                    existing_graph_id, skip_chunk_indices, chunk_completed_callback,
                 )
             )
-
-            # 5. Zep 처리 완료 대기
-            self.task_manager.update_task(
-                task_id,
-                progress=60,
-                message="Zep 데이터 처리 대기 중..."
-            )
-
-            self._wait_for_episodes(
-                episode_uuids,
-                lambda msg, prog: self.task_manager.update_task(
-                    task_id,
-                    progress=60 + int(prog * 0.3),  # 60-90%
-                    message=msg
-                )
-            )
-
-            # 6. 그래프 정보 가져오기
-            self.task_manager.update_task(
-                task_id,
-                progress=90,
-                message="그래프 정보 가져오는 중..."
-            )
-
-            graph_info = self._get_graph_info(graph_id)
-
-            # 완료
-            self.task_manager.complete_task(task_id, {
-                "graph_id": graph_id,
-                "graph_info": graph_info.to_dict(),
-                "chunks_processed": total_chunks,
-            })
-
+            self.task_manager.complete_task(task_id, result)
         except Exception as e:
-            import traceback
-            error_msg = f"{str(e)}\n{traceback.format_exc()}"
-            self.task_manager.fail_task(task_id, error_msg)
+            err = f'{type(e).__name__}: {e}\n{traceback.format_exc()}'
+            logger.error(f'graph build 실패 task_id={task_id}: {err}')
+            self.task_manager.fail_task(task_id, err)
 
-    def create_graph(self, name: str) -> str:
-        """Zep 그래프 생성 (공개 메서드)"""
-        graph_id = f"mirofish_{uuid.uuid4().hex[:16]}"
+    async def _build_async(
+        self,
+        task_id: str,
+        text: str,
+        ontology: Dict[str, Any],
+        graph_name: str,
+        chunk_size: int,
+        chunk_overlap: int,
+        existing_graph_id: Optional[str] = None,
+        skip_chunk_indices: Optional[List[int]] = None,
+        chunk_completed_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> Dict[str, Any]:
+        # Fix G4: existing_graph_id 있으면 재사용 (retry 시 부분 진행분 보존).
+        # 없으면 새로 생성.
+        if existing_graph_id:
+            graph_id = existing_graph_id
+            logger.info(f'graph build 재개 (existing_graph_id={graph_id})')
+        else:
+            graph_id = f'mirofish_{uuid.uuid4().hex[:16]}'
+        group_id = graph_id  # Graphiti namespace로 재사용
+        skip_set = set(skip_chunk_indices or [])
+        logger.info(f'graph build 시작 group_id={group_id} name={graph_name!r}')
 
-        self.client.graph.create(
-            graph_id=graph_id,
-            name=name,
-            description="MiroFish Social Simulation Graph"
+        self.task_manager.update_task(
+            task_id, progress=10, message=f'group_id={group_id[:24]}...',
         )
 
-        return graph_id
+        # 1) 온톨로지 → pydantic 클래스 dict
+        # 참고: graphiti-core 0.11.x의 add_episode는 entity_types만 받는다.
+        # edge는 LLM이 episode 본문에서 자동 추출하므로 edge_types는 보조 메타
+        # (ontology_generator/tools 쪽에서만 쓸 수 있도록 build은 해두되 전달 X).
+        entity_types = build_entity_types(ontology)
+        edge_types = build_edge_types(ontology)
+        logger.info(
+            f'ontology build: entities={list(entity_types)}, '
+            f'edges(meta only)={list(edge_types)}'
+        )
+        self.task_manager.update_task(
+            task_id, progress=15,
+            message=f'ontology: entity {len(entity_types)} + edge {len(edge_types)} (meta)',
+        )
 
-    def set_ontology(self, graph_id: str, ontology: Dict[str, Any]):
-        """그래프 온톨로지 설정 (공개 메서드)"""
-        import warnings
-        from typing import Optional
-        from pydantic import Field
-        from zep_cloud.external_clients.ontology import EntityModel, EntityText, EdgeModel
+        # 2) 텍스트 청킹
+        chunks = TextProcessor.split_text(text, chunk_size, chunk_overlap)
+        total = len(chunks)
+        self.task_manager.update_task(
+            task_id, progress=20,
+            message=f'텍스트 {total}개 청크로 분할',
+        )
+        logger.info(f'chunks: {total} (chunk_size={chunk_size} overlap={chunk_overlap})')
 
-        # Pydantic v2의 Field(default=None) 관련 경고 억제
-        # 이는 Zep SDK에서 요구하는 사용법이며, 동적 클래스 생성으로 인한 경고이므로 안전하게 무시 가능
-        warnings.filterwarnings('ignore', category=UserWarning, module='pydantic')
+        # 3) Graphiti 초기화
+        graphiti = create_graphiti(self.graphiti_config)
+        try:
+            await graphiti.build_indices_and_constraints()
 
-        # Zep 예약 이름, 속성명으로 사용 불가
-        RESERVED_NAMES = {'uuid', 'name', 'group_id', 'name_embedding', 'summary', 'created_at'}
+            # 4) 병렬 add_episode — outer semaphore로 동시 chunk 수 제한.
+            #    Graphiti 내부 SEMAPHORE_LIMIT만으로는 부족 (각 add_episode가
+            #    여러 nested LLM 호출을 가짐 → chunk 9개 × nested concurrent =
+            #    조직 TPM 한도 200k 즉시 돌파). outer 제한으로 burst 평탄화.
+            #    기본 2, GRAPH_BUILDER_MAX_CONCURRENT 환경변수로 조정 가능.
+            max_concurrent = int(os.environ.get('GRAPH_BUILDER_MAX_CONCURRENT', '2'))
+            # chunk 간 인위적 지연 — OpenAI 조직 TPM 한도(우리 환경 Tier 1 기준
+            # 200k/min)가 9 chunks × ~35k tokens 동시 처리에 부족할 때 사용.
+            # Tier 2+ 환경에서는 0으로 두면 최대 throughput.
+            chunk_delay_s = float(os.environ.get('GRAPH_BUILDER_CHUNK_DELAY_S', '0'))
+            outer_semaphore = asyncio.Semaphore(max_concurrent)
+            reference_time = datetime.now(timezone.utc)
+            completed = {'count': 0}
+            lock = asyncio.Lock()
 
-        def safe_attr_name(attr_name: str) -> str:
-            """예약 이름을 안전한 이름으로 변환"""
-            if attr_name.lower() in RESERVED_NAMES:
-                return f"entity_{attr_name}"
-            return attr_name
+            async def add_one(idx: int, chunk: str) -> None:
+                # Fix G4: 이미 처리된 chunk 는 스킵 (retry 비용 절감)
+                if idx in skip_set:
+                    async with lock:
+                        completed['count'] += 1
+                    logger.info(f'chunk {idx + 1}/{total} 스킵 (이전 retry 에서 처리됨)')
+                    return
+                async with outer_semaphore:
+                    await _add_one_unlocked(idx, chunk)
+                    if chunk_delay_s > 0:
+                        await asyncio.sleep(chunk_delay_s)
 
-        # 동적 엔티티 유형 생성
-        entity_types = {}
-        for entity_def in ontology.get("entity_types", []):
-            name = entity_def["name"]
-            description = entity_def.get("description", f"A {name} entity.")
-
-            # 속성 딕셔너리 및 타입 어노테이션 생성 (Pydantic v2 필요)
-            attrs = {"__doc__": description}
-            annotations = {}
-
-            for attr_def in entity_def.get("attributes", []):
-                attr_name = safe_attr_name(attr_def["name"])  # 안전한 이름 사용
-                attr_desc = attr_def.get("description", attr_name)
-                # Zep API는 Field의 description이 필요하며, 이는 필수
-                attrs[attr_name] = Field(description=attr_desc, default=None)
-                annotations[attr_name] = Optional[EntityText]  # 타입 어노테이션
-
-            attrs["__annotations__"] = annotations
-
-            # 동적 클래스 생성
-            entity_class = type(name, (EntityModel,), attrs)
-            entity_class.__doc__ = description
-            entity_types[name] = entity_class
-
-        # 동적 엣지 유형 생성
-        edge_definitions = {}
-        for edge_def in ontology.get("edge_types", []):
-            name = edge_def["name"]
-            description = edge_def.get("description", f"A {name} relationship.")
-
-            # 속성 딕셔너리 및 타입 어노테이션 생성
-            attrs = {"__doc__": description}
-            annotations = {}
-
-            for attr_def in edge_def.get("attributes", []):
-                attr_name = safe_attr_name(attr_def["name"])  # 안전한 이름 사용
-                attr_desc = attr_def.get("description", attr_name)
-                # Zep API는 Field의 description이 필요하며, 이는 필수
-                attrs[attr_name] = Field(description=attr_desc, default=None)
-                annotations[attr_name] = Optional[str]  # 엣지 속성은 str 타입 사용
-
-            attrs["__annotations__"] = annotations
-
-            # 동적 클래스 생성
-            class_name = ''.join(word.capitalize() for word in name.split('_'))
-            edge_class = type(class_name, (EdgeModel,), attrs)
-            edge_class.__doc__ = description
-
-            # source_targets 구성
-            source_targets = []
-            for st in edge_def.get("source_targets", []):
-                source_targets.append(
-                    EntityEdgeSourceTarget(
-                        source=st.get("source", "Entity"),
-                        target=st.get("target", "Entity")
-                    )
-                )
-
-            if source_targets:
-                edge_definitions[name] = (edge_class, source_targets)
-
-        # Zep API를 호출하여 온톨로지 설정
-        if entity_types or edge_definitions:
-            self.client.graph.set_ontology(
-                graph_ids=[graph_id],
-                entities=entity_types if entity_types else None,
-                edges=edge_definitions if edge_definitions else None,
-            )
-
-    def add_text_batches(
-        self,
-        graph_id: str,
-        chunks: List[str],
-        batch_size: int = 3,
-        progress_callback: Optional[Callable] = None
-    ) -> List[str]:
-        """배치별 텍스트를 그래프에 추가, 모든 episode의 uuid 목록 반환"""
-        episode_uuids = []
-        total_chunks = len(chunks)
-
-        for i in range(0, total_chunks, batch_size):
-            batch_chunks = chunks[i:i + batch_size]
-            batch_num = i // batch_size + 1
-            total_batches = (total_chunks + batch_size - 1) // batch_size
-
-            if progress_callback:
-                progress = (i + len(batch_chunks)) / total_chunks
-                progress_callback(
-                    f"배치 {batch_num}/{total_batches} 데이터 전송 중 ({len(batch_chunks)}개 청크)...",
-                    progress
-                )
-
-            # episode 데이터 구성
-            episodes = [
-                EpisodeData(data=chunk, type="text")
-                for chunk in batch_chunks
-            ]
-
-            # Zep으로 전송
-            try:
-                batch_result = self.client.graph.add_batch(
-                    graph_id=graph_id,
-                    episodes=episodes
-                )
-
-                # 반환된 episode uuid 수집
-                if batch_result and isinstance(batch_result, list):
-                    for ep in batch_result:
-                        ep_uuid = getattr(ep, 'uuid_', None) or getattr(ep, 'uuid', None)
-                        if ep_uuid:
-                            episode_uuids.append(ep_uuid)
-
-                # 요청 과도 방지
-                time.sleep(1)
-
-            except Exception as e:
-                if progress_callback:
-                    progress_callback(f"배치 {batch_num} 전송 실패: {str(e)}", 0)
-                raise
-
-        return episode_uuids
-
-    def _wait_for_episodes(
-        self,
-        episode_uuids: List[str],
-        progress_callback: Optional[Callable] = None,
-        timeout: int = 600
-    ):
-        """모든 episode 처리 완료 대기 (각 episode의 processed 상태 조회를 통해)"""
-        if not episode_uuids:
-            if progress_callback:
-                progress_callback("대기 불필요 (episode 없음)", 1.0)
-            return
-
-        start_time = time.time()
-        pending_episodes = set(episode_uuids)
-        completed_count = 0
-        total_episodes = len(episode_uuids)
-
-        if progress_callback:
-            progress_callback(f"{total_episodes}개 텍스트 청크 처리 대기 시작...", 0)
-
-        while pending_episodes:
-            if time.time() - start_time > timeout:
-                if progress_callback:
-                    progress_callback(
-                        f"일부 텍스트 청크 시간 초과, 완료: {completed_count}/{total_episodes}",
-                        completed_count / total_episodes
-                    )
-                break
-
-            # 각 episode의 처리 상태 확인
-            for ep_uuid in list(pending_episodes):
+            async def _add_one_unlocked(idx: int, chunk: str) -> None:
+                success = False
                 try:
-                    episode = self.client.graph.episode.get(uuid_=ep_uuid)
-                    is_processed = getattr(episode, 'processed', False)
+                    # EpisodeType import는 버전 따라 위치가 달라 graceful fallback
+                    source = None
+                    try:
+                        from graphiti_core.nodes import EpisodeType  # type: ignore
+                        source = EpisodeType.text
+                    except ImportError:
+                        pass
 
-                    if is_processed:
-                        pending_episodes.remove(ep_uuid)
-                        completed_count += 1
+                    kwargs = dict(
+                        name=f'{graph_name} chunk {idx + 1}/{total}',
+                        episode_body=chunk,
+                        source_description='MiroFish seed chunk',
+                        reference_time=reference_time,
+                        group_id=group_id,
+                        entity_types=entity_types,
+                    )
+                    if source is not None:
+                        kwargs['source'] = source
+                    # graphiti-core 0.11+ 버전에 따라 edge_types 파라미터 지원 여부가
+                    # 다름. 지원 시 전달, 아니면 entity_types만 전달 (LLM이 edge 자동 추출).
+                    try:
+                        await graphiti.add_episode(**kwargs, edge_types=edge_types)
+                    except TypeError:
+                        await graphiti.add_episode(**kwargs)
+                    success = True
+                finally:
+                    async with lock:
+                        completed['count'] += 1
+                        done = completed['count']
+                    # Fix G4: 성공한 경우만 callback (외부에서 progress 영속화)
+                    if success and chunk_completed_callback:
+                        try:
+                            chunk_completed_callback(idx, group_id)
+                        except Exception as cb_err:
+                            logger.warning(f'chunk_completed_callback 실패 idx={idx}: {cb_err}')
+                    # 20 ~ 85% 범위에서 진행률 반영
+                    if done % max(1, total // 10) == 0 or done == total:
+                        self.task_manager.update_task(
+                            task_id,
+                            progress=20 + int(done / max(1, total) * 65),
+                            message=f'add_episode {done}/{total}',
+                        )
 
-                except Exception as e:
-                    # 단일 조회 오류 무시, 계속 진행
-                    pass
+            await asyncio.gather(*[add_one(i, c) for i, c in enumerate(chunks)])
 
-            elapsed = int(time.time() - start_time)
-            if progress_callback:
-                progress_callback(
-                    f"Zep 처리 중... {completed_count}/{total_episodes} 완료, {len(pending_episodes)}개 대기 중 ({elapsed}초)",
-                    completed_count / total_episodes if total_episodes > 0 else 0
-                )
+            # 5) 그래프 정보 수집 (노드/엣지 count, entity_types 실측)
+            self.task_manager.update_task(
+                task_id, progress=90, message='graph info 수집 중...',
+            )
+            info = self._collect_graph_info(group_id, expected_types=list(entity_types))
+            logger.info(
+                f'graph build 완료 group_id={group_id} '
+                f'nodes={info.node_count} edges={info.edge_count}'
+            )
+            return {
+                'graph_id': group_id,
+                'graph_info': info.to_dict(),
+                'chunks_processed': total,
+            }
+        finally:
+            try:
+                await graphiti.close()
+            except Exception as e:
+                logger.warning(f'graphiti.close 중 경고: {e}')
 
-            if pending_episodes:
-                time.sleep(3)  # 3초마다 확인
+    def _collect_graph_info(
+        self, group_id: str, expected_types: Optional[List[str]] = None
+    ) -> GraphInfo:
+        """Neo4j에서 그래프 요약 수집."""
+        driver = neo4j_driver(self.graphiti_config)
+        try:
+            nodes = fetch_all_nodes(
+                driver, group_id=group_id,
+                database=self.graphiti_config.neo4j_database,
+            )
+            edges = fetch_all_edges(
+                driver, group_id=group_id,
+                database=self.graphiti_config.neo4j_database,
+            )
+            # 실측 entity_types: 노드의 labels - {'Entity'} (Graphiti가 Entity + 구체 label 부여)
+            actual_labels: set[str] = set()
+            for n in nodes:
+                for label in n.get('labels') or []:
+                    if label != 'Entity':
+                        actual_labels.add(label)
+            entity_list = sorted(actual_labels) or (expected_types or [])
+            return GraphInfo(
+                graph_id=group_id,
+                node_count=len(nodes),
+                edge_count=len(edges),
+                entity_types=entity_list,
+            )
+        finally:
+            driver.close()
 
-        if progress_callback:
-            progress_callback(f"처리 완료: {completed_count}/{total_episodes}", 1.0)
-
-    def _get_graph_info(self, graph_id: str) -> GraphInfo:
-        """그래프 정보 가져오기"""
-        # 노드 가져오기 (페이지네이션)
-        nodes = fetch_all_nodes(self.client, graph_id)
-
-        # 엣지 가져오기 (페이지네이션)
-        edges = fetch_all_edges(self.client, graph_id)
-
-        # 엔티티 유형 집계
-        entity_types = set()
-        for node in nodes:
-            if node.labels:
-                for label in node.labels:
-                    if label not in ["Entity", "Node"]:
-                        entity_types.add(label)
-
-        return GraphInfo(
-            graph_id=graph_id,
-            node_count=len(nodes),
-            edge_count=len(edges),
-            entity_types=list(entity_types)
-        )
-
+    # ── 조회/삭제 API (api/graph.py 엔드포인트) ─────────────────────
     def get_graph_data(self, graph_id: str) -> Dict[str, Any]:
-        """
-        전체 그래프 데이터 가져오기 (상세 정보 포함)
+        """그래프 시각화용 nodes/edges payload 반환. GraphPanel.vue에서 소비."""
+        driver = neo4j_driver(self.graphiti_config)
+        try:
+            raw_nodes = fetch_all_nodes(
+                driver, group_id=graph_id,
+                database=self.graphiti_config.neo4j_database,
+            )
+            raw_edges = fetch_all_edges(
+                driver, group_id=graph_id,
+                database=self.graphiti_config.neo4j_database,
+            )
+        finally:
+            driver.close()
 
-        Args:
-            graph_id: 그래프 ID
+        # neo4j.time.DateTime → ISO string. flask jsonify 직렬화 가능하게.
+        # 거대한 name_embedding (~1500 float)도 frontend엔 불필요하므로 제거.
+        _STRIP_ATTR_KEYS = {'name_embedding', 'fact_embedding'}
 
-        Returns:
-            nodes와 edges를 포함하는 딕셔너리 (시간 정보, 속성 등 상세 데이터 포함)
-        """
-        nodes = fetch_all_nodes(self.client, graph_id)
-        edges = fetch_all_edges(self.client, graph_id)
+        def _serialize(v):
+            if v is None or isinstance(v, (str, int, float, bool)):
+                return v
+            if hasattr(v, 'isoformat'):
+                return v.isoformat()
+            if isinstance(v, dict):
+                return {k: _serialize(val) for k, val in v.items() if k not in _STRIP_ATTR_KEYS}
+            if isinstance(v, (list, tuple)):
+                return [_serialize(x) for x in v]
+            return str(v)
 
-        # 노드 이름 조회용 노드 맵 생성
-        node_map = {}
-        for node in nodes:
-            node_map[node.uuid_] = node.name or ""
-
-        nodes_data = []
-        for node in nodes:
-            # 생성 시간 가져오기
-            created_at = getattr(node, 'created_at', None)
-            if created_at:
-                created_at = str(created_at)
-
-            nodes_data.append({
-                "uuid": node.uuid_,
-                "name": node.name,
-                "labels": node.labels or [],
-                "summary": node.summary or "",
-                "attributes": node.attributes or {},
-                "created_at": created_at,
-            })
-
-        edges_data = []
-        for edge in edges:
-            # 시간 정보 가져오기
-            created_at = getattr(edge, 'created_at', None)
-            valid_at = getattr(edge, 'valid_at', None)
-            invalid_at = getattr(edge, 'invalid_at', None)
-            expired_at = getattr(edge, 'expired_at', None)
-
-            # episodes 가져오기
-            episodes = getattr(edge, 'episodes', None) or getattr(edge, 'episode_ids', None)
-            if episodes and not isinstance(episodes, list):
-                episodes = [str(episodes)]
-            elif episodes:
-                episodes = [str(e) for e in episodes]
-
-            # fact_type 가져오기
-            fact_type = getattr(edge, 'fact_type', None) or edge.name or ""
-
-            edges_data.append({
-                "uuid": edge.uuid_,
-                "name": edge.name or "",
-                "fact": edge.fact or "",
-                "fact_type": fact_type,
-                "source_node_uuid": edge.source_node_uuid,
-                "target_node_uuid": edge.target_node_uuid,
-                "source_node_name": node_map.get(edge.source_node_uuid, ""),
-                "target_node_name": node_map.get(edge.target_node_uuid, ""),
-                "attributes": edge.attributes or {},
-                "created_at": str(created_at) if created_at else None,
-                "valid_at": str(valid_at) if valid_at else None,
-                "invalid_at": str(invalid_at) if invalid_at else None,
-                "expired_at": str(expired_at) if expired_at else None,
-                "episodes": episodes or [],
-            })
-
+        nodes = [
+            {
+                'uuid': n.get('uuid'),
+                'name': n.get('name'),
+                'labels': [lbl for lbl in (n.get('labels') or []) if lbl != 'Entity'],
+                'summary': n.get('summary'),
+                'attributes': _serialize(n.get('attributes') or {}),
+                'created_at': _serialize(n.get('created_at')),
+            }
+            for n in raw_nodes
+        ]
+        edges = [
+            {
+                'uuid': e.get('uuid'),
+                'name': e.get('name'),
+                'fact': e.get('fact'),
+                'source_node_uuid': e.get('source_node_uuid'),
+                'target_node_uuid': e.get('target_node_uuid'),
+                'created_at': _serialize(e.get('created_at')),
+            }
+            for e in raw_edges
+        ]
         return {
-            "graph_id": graph_id,
-            "nodes": nodes_data,
-            "edges": edges_data,
-            "node_count": len(nodes_data),
-            "edge_count": len(edges_data),
+            'graph_id': graph_id,
+            'nodes': nodes,
+            'edges': edges,
+            'node_count': len(nodes),
+            'edge_count': len(edges),
         }
 
-    def delete_graph(self, graph_id: str):
-        """그래프 삭제"""
-        self.client.graph.delete(graph_id=graph_id)
+    def delete_graph(self, graph_id: str) -> None:
+        """group_id 범위의 모든 노드/엣지/에피소드를 Neo4j에서 제거."""
+        driver = neo4j_driver(self.graphiti_config)
+        try:
+            with driver.session(database=self.graphiti_config.neo4j_database) as session:
+                session.run(
+                    """
+                    MATCH (n)
+                    WHERE n.group_id = $gid
+                    DETACH DELETE n
+                    """,
+                    gid=graph_id,
+                )
+        finally:
+            driver.close()

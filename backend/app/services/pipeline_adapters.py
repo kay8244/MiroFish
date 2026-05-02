@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -43,7 +44,8 @@ logger = logging.getLogger('mirofish.pipeline_adapters')
 
 # graph_builder.build_graph_async 비동기 폴링 설정
 _GRAPH_POLL_INTERVAL_S = 5
-_GRAPH_POLL_MAX_S = 9 * 60  # 10분 wall-clock에서 1분 버퍼
+# Fix G4: wall-clock 40분에 맞춰 polling 도 35분으로 (5분 마진).
+_GRAPH_POLL_MAX_S = 35 * 60
 
 
 def graph_adapter(ctx: StepContext) -> dict:
@@ -73,25 +75,70 @@ def graph_adapter(ctx: StepContext) -> dict:
         'AI 서버 → SI 웨이퍼 수요 예측 (한국어 시뮬레이션)',
     )
 
-    # 1) 온톨로지 생성
-    logger.info('graph: ontology 생성 중...')
-    ontology_gen = OntologyGenerator()
-    ontology = ontology_gen.generate(
-        document_texts=[document_text],
-        simulation_requirement=simulation_requirement,
-    )
-
-    # tmp_dir에 ontology 보관 (디버깅/audit 용)
-    (ctx.tmp_dir / 'ontology.json').write_text(
-        json.dumps(ontology, ensure_ascii=False, indent=2),
-        encoding='utf-8',
-    )
+    # 1) 온톨로지 생성 (Fix F: tmp_dir 캐시 — step retry 시 재생성 방지)
+    ontology_cache = ctx.tmp_dir / 'ontology.json'
+    if ontology_cache.exists():
+        logger.info(f'graph: ontology 재사용 (이전 retry 결과: {ontology_cache})')
+        ontology = json.loads(ontology_cache.read_text(encoding='utf-8'))
+    else:
+        logger.info('graph: ontology 생성 중...')
+        ontology_gen = OntologyGenerator()
+        ontology = ontology_gen.generate(
+            document_texts=[document_text],
+            simulation_requirement=simulation_requirement,
+        )
+        # tmp_dir에 ontology 보관 (디버깅/audit + 다음 retry 재사용)
+        ontology_cache.write_text(
+            json.dumps(ontology, ensure_ascii=False, indent=2),
+            encoding='utf-8',
+        )
 
     # 2) Zep graph 비동기 구축
     chunk_size = ctx.config.get('chunk_size', 500)
     chunk_overlap = ctx.config.get('chunk_overlap', 50)
     batch_size = ctx.config.get('zep_batch_size', 3)
     graph_name = f'MiroFish run {ctx.run_id[:8]}'
+
+    # Fix G4: graph_progress.json 으로 retry 시 처리된 chunk + graph_id 보존.
+    # 형태: {"graph_id": "mirofish_xxx", "chunks_processed": [0,1,2]}
+    progress_file = ctx.tmp_dir / 'graph_progress.json'
+    progress_lock = threading.Lock()
+    existing_graph_id = None
+    skip_chunk_indices: list = []
+    if progress_file.exists():
+        try:
+            prev_progress = json.loads(progress_file.read_text(encoding='utf-8'))
+            existing_graph_id = prev_progress.get('graph_id')
+            skip_chunk_indices = list(prev_progress.get('chunks_processed') or [])
+            logger.info(
+                f'graph: 이전 retry 진행분 발견 — graph_id={existing_graph_id}, '
+                f'스킵할 chunks={len(skip_chunk_indices)}개'
+            )
+        except Exception as e:
+            logger.warning(f'graph_progress.json 파싱 실패, 새로 시작: {e}')
+            existing_graph_id = None
+            skip_chunk_indices = []
+
+    def _on_chunk_completed(idx: int, gid: str) -> None:
+        """builder thread 에서 호출. 원자적 쓰기로 race 방지."""
+        with progress_lock:
+            try:
+                cur = {}
+                if progress_file.exists():
+                    cur = json.loads(progress_file.read_text(encoding='utf-8'))
+                cur['graph_id'] = gid
+                processed = list(cur.get('chunks_processed') or [])
+                if idx not in processed:
+                    processed.append(idx)
+                cur['chunks_processed'] = processed
+                tmp = progress_file.with_suffix('.tmp')
+                tmp.write_text(
+                    json.dumps(cur, ensure_ascii=False, indent=2),
+                    encoding='utf-8',
+                )
+                tmp.replace(progress_file)
+            except Exception as e:
+                logger.warning(f'progress 저장 실패 idx={idx}: {e}')
 
     builder = GraphBuilderService()
     task_id = builder.build_graph_async(
@@ -101,6 +148,9 @@ def graph_adapter(ctx: StepContext) -> dict:
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         batch_size=batch_size,
+        existing_graph_id=existing_graph_id,
+        skip_chunk_indices=skip_chunk_indices,
+        chunk_completed_callback=_on_chunk_completed,
     )
     logger.info(f'graph: build_graph_async task_id={task_id}, 폴링 시작')
 

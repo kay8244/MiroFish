@@ -1,0 +1,123 @@
+/*
+ * MiroFish design tokens — Apple-inspired editorial system.
+ * Light by default. Dark scenes opt-in via [data-theme="dark"].
+ *
+ * Reference: DESIGN-apple.md (neutral triad + single blue accent + capsule geometry).
+ */
+
+:root {
+  /* === Surfaces === */
+  --color-canvas: #ffffff;             /* Pure white — retail/transactional */
+  --color-canvas-muted: #f5f5f7;       /* Pale Apple Gray — feature bands */
+  --color-canvas-inverse: #000000;     /* Absolute black — cinematic chapters */
+
+  --color-surface: #ffffff;            /* Default card surface */
+  --color-surface-muted: #f5f5f7;      /* Secondary card surface */
+  --color-surface-elevated: #ffffff;   /* Elevated card; rely on shadow + border */
+
+  /* Dark utility surfaces (graphite ladder) */
+  --color-surface-dark-1: #272729;
+  --color-surface-dark-2: #28282b;
+  --color-surface-dark-3: #2a2a2c;
+
+  /* === Text === */
+  --color-text: #1d1d1f;               /* Near-black ink */
+  --color-text-muted: #6e6e73;         /* Secondary neutral gray */
+  --color-text-inverse: #ffffff;       /* On dark surfaces */
+  --color-text-link: #0066cc;          /* Body link blue */
+  --color-text-link-bright: #2997ff;   /* Link on dark scenes */
+
+  /* === Borders === */
+  --color-border-subtle: #d2d2d7;      /* Soft border */
+  --color-border-strong: #86868b;      /* Mid border for inputs */
+  --color-border-heavy: #424245;       /* Utility dark crossover */
+
+  /* === Accent (single-blue family) === */
+  --color-accent: #0071e3;             /* Apple action blue */
+  --color-accent-hover: #0066cc;       /* Slightly deeper for hover */
+  --color-accent-pressed: #004fa1;     /* Pressed state */
+  --color-accent-on: #ffffff;          /* Text/icon on accent fill */
+
+  /* === Semantic (minimal — not strongly defined in Apple system) === */
+  --color-error: #d32f2f;
+  --color-error-bg: #fdecea;
+  --color-warning: #b25e00;
+  --color-warning-bg: #fff4e5;
+  --color-success: #1f7a3d;
+  --color-success-bg: #e6f4ea;
+
+  /* === Typography === */
+  --font-display: 'Inter Tight', 'Inter', -apple-system, BlinkMacSystemFont,
+                  'SF Pro Display', 'Helvetica Neue', Helvetica, Arial,
+                  'Noto Sans SC', sans-serif;
+  --font-text: 'Inter', -apple-system, BlinkMacSystemFont,
+               'SF Pro Text', 'Helvetica Neue', Helvetica, Arial,
+               'Noto Sans SC', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Scale (compact, Apple-style) */
+  --fs-hero-xl: 80px;
+  --fs-hero-l: 56px;
+  --fs-section: 48px;
+  --fs-product: 40px;
+  --fs-feature: 38px;
+  --fs-promo: 32px;
+  --fs-card: 28px;
+  --fs-utility: 24px;
+  --fs-link-action: 21px;
+  --fs-subhead: 19px;
+  --fs-body: 17px;
+  --fs-control: 14px;
+  --fs-micro: 12px;
+  --fs-legal: 10px;
+
+  /* === Radii === */
+  --radius-xs: 5px;     /* tags, tiny shells */
+  --radius-sm: 8px;     /* buttons, compact fields */
+  --radius-md: 12px;    /* standard cards */
+  --radius-lg: 18px;    /* commerce panels */
+  --radius-xl: 28px;    /* spotlight modules */
+  --radius-2xl: 36px;
+  --radius-pill: 980px; /* signature elongated CTA */
+  --radius-circle: 50%;
+
+  /* === Spacing (8-base, with micro steps) === */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 32px;
+  --space-10: 48px;
+  --space-11: 64px;
+  --space-12: 96px;
+
+  /* === Elevation (used sparingly) === */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-3: 0 10px 40px rgba(0, 0, 0, 0.12);
+
+  /* === Motion === */
+  --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+}
+
+/* Dark scene override (opt-in via [data-theme="dark"] on a section/page) */
+[data-theme="dark"] {
+  --color-canvas: #000000;
+  --color-canvas-muted: #1d1d1f;
+  --color-surface: var(--color-surface-dark-1);
+  --color-surface-muted: var(--color-surface-dark-2);
+  --color-surface-elevated: var(--color-surface-dark-3);
+  --color-text: #ffffff;
+  --color-text-muted: #a1a1a6;
+  --color-text-inverse: #1d1d1f;
+  --color-text-link: var(--color-text-link-bright);
+  --color-border-subtle: #424245;
+  --color-border-strong: #6e6e73;
+}

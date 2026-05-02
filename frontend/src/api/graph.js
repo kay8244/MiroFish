@@ -34,6 +34,28 @@ export function buildGraph(data) {
 }
 
 /**
+ * Incremental append: 기존 프로젝트의 그래프에 새 파일들을 추가 (graph_id 유지).
+ * @param {string} projectId
+ * @param {File[]} files
+ * @returns {Promise} { task_id, graph_id, files_added, added_text_length }
+ */
+export function appendFilesToProject(projectId, files) {
+  const formData = new FormData()
+  formData.append('project_id', projectId)
+  for (const file of files) {
+    formData.append('files', file)
+  }
+  return requestWithRetry(() =>
+    service({
+      url: '/api/graph/append',
+      method: 'post',
+      data: formData,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  )
+}
+
+/**
  * Query task status
  * @param {String} taskId - Task ID
  * @returns {Promise}

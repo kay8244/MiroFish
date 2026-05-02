@@ -21,8 +21,8 @@ from enum import Enum
 from ..config import Config
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
-from .zep_tools import (
-    ZepToolsService, 
+from .graphiti_tools import (
+    GraphitiToolsService, 
     SearchResult, 
     InsightForgeResult, 
     PanoramaResult,
@@ -620,8 +620,6 @@ SECTION_SYSTEM_PROMPT_TEMPLATE = """\
 보고서 요약: {report_summary}
 예측 시나리오 (시뮬레이션 요구사항): {simulation_requirement}
 
-현재 작성할 챕터: {section_title}
-
 ═══════════════════════════════════════════════════════════════
 【핵심 이념】
 ═══════════════════════════════════════════════════════════════
@@ -891,7 +889,7 @@ class ReportAgent:
         simulation_id: str,
         simulation_requirement: str,
         llm_client: Optional[LLMClient] = None,
-        zep_tools: Optional[ZepToolsService] = None
+        zep_tools: Optional[GraphitiToolsService] = None
     ):
         """
         Report Agent 초기화
@@ -908,7 +906,7 @@ class ReportAgent:
         self.simulation_requirement = simulation_requirement
 
         self.llm = llm_client or LLMClient()
-        self.zep_tools = zep_tools or ZepToolsService()
+        self.zep_tools = zep_tools or GraphitiToolsService()
 
         # 도구 정의
         self.tools = self._define_tools()
@@ -1256,11 +1254,12 @@ class ReportAgent:
         if self.report_logger:
             self.report_logger.log_section_start(section.title, section_index)
         
+        # Fix C: section_title 은 system 에서 제거하여 섹션 간 prompt caching 재사용.
+        # section_title 은 user_prompt 에만 포함 (SECTION_USER_PROMPT_TEMPLATE 내 이미 있음).
         system_prompt = SECTION_SYSTEM_PROMPT_TEMPLATE.format(
             report_title=outline.title,
             report_summary=outline.summary,
             simulation_requirement=self.simulation_requirement,
-            section_title=section.title,
             tools_description=self._get_tools_description(),
         )
 

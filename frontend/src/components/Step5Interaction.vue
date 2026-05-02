@@ -27,6 +27,7 @@
           @toggle-dropdown="toggleAgentDropdown"
           @select-agent="selectAgent"
           @select-survey="selectSurveyTab"
+          @select-scenario="selectScenarioTab"
         />
 
         <!-- Chat Mode -->
@@ -68,6 +69,12 @@
           @update:surveyQuestion="survey.surveyQuestion.value = $event"
           @submit="survey.submitSurvey"
         />
+
+        <!-- B 시나리오: 같은 graph + 새 질문 → 시뮬+보고서 -->
+        <ScenarioPanel
+          v-if="activeTab === 'scenario' && simulationId"
+          :simulationId="simulationId"
+        />
       </div>
     </div>
   </div>
@@ -75,6 +82,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import DOMPurify from 'dompurify'
 import { getReport, getAgentLog } from '../api/report'
 import { getSimulationProfilesRealtime } from '../api/simulation'
 import { useChat } from '../composables/useChat'
@@ -85,6 +93,7 @@ import ChatMessages from './interaction/ChatMessages.vue'
 import SurveyPanel from './interaction/SurveyPanel.vue'
 import ReportAgentToolsCard from './interaction/ReportAgentToolsCard.vue'
 import AgentProfileCard from './interaction/AgentProfileCard.vue'
+import ScenarioPanel from './interaction/ScenarioPanel.vue'
 
 const props = defineProps({
   reportId: String,
@@ -211,7 +220,8 @@ const renderMarkdown = (content) => {
   }
   html = tokens.join('')
 
-  return html
+  // XSS 방지: LLM/사용자 콘텐츠가 v-html 로 삽입되므로 위험 태그 제거 (utils/reportMarkdown.js 와 동일)
+  return DOMPurify.sanitize(html, { ADD_ATTR: ['data-level', 'start'] })
 }
 
 // Section collapse toggle
@@ -239,6 +249,13 @@ const selectReportAgentChat = () => {
 
 const selectSurveyTab = () => {
   activeTab.value = 'survey'
+  selectedAgent.value = null
+  selectedAgentIndex.value = null
+  showAgentDropdown.value = false
+}
+
+const selectScenarioTab = () => {
+  activeTab.value = 'scenario'
   selectedAgent.value = null
   selectedAgentIndex.value = null
   showAgentDropdown.value = false

@@ -14,8 +14,12 @@ dependencies = [
     "flask-cors>=6.0.0",
     # LLM 相关
     "openai>=1.0.0",
-    # Zep Cloud
-    "zep-cloud==3.13.0",
+    # Graphiti (Zep OSS 코어) — knowledge graph 백엔드. Phase 0~6 마이그레이션 완료.
+    # camel-oasis 0.2.5가 neo4j==5.23.0을 고정하므로 동일 버전 사용. Graphiti는
+    # bolt protocol만 쓰므로 5.20+에서 동작.
+    "graphiti-core>=0.4.0",
+    # YAML 파서 (assumptions YAML 로더용)
+    "PyYAML>=6.0",
     # OASIS 社交媒体模拟
     "camel-oasis==0.2.5",
     "camel-ai==0.2.78",
@@ -28,6 +32,10 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",
     "anthropic>=0.86.0",
+    "flask-login>=0.6.3",
+    "bcrypt>=5.0.0",
+    # Redis IPC (TODOS #2): file-IPC race 해결. REDIS_URL 미설정 시 file IPC로 fallback.
+    "redis>=5.0.0",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +43,14 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pipreqs>=0.5.0",
+    # Redis IPC 단위 테스트 (실제 Redis 없이 동작)
+    "fakeredis>=2.20.0",
+]
+# Legacy Zep Cloud 경로 (graph_builder_zep_legacy, zep_client_legacy,
+# zep_paging_legacy, oasis_profile_generator._search_zep_for_entity)를 활성화
+# 하려면 `uv sync --extra zep`로 설치. 기본 Graphiti 경로는 이 extra 없이 동작.
+zep = [
+    "zep-cloud==3.13.0",
 ]
 
 [build-system]
@@ -45,6 +61,7 @@ build-backend = "hatchling.build"
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
+    "fakeredis>=2.20.0",
 ]
 
 [tool.hatch.build.targets.wheel]

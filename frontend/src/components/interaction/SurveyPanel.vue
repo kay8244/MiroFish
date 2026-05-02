@@ -4,7 +4,7 @@
     <div class="survey-setup">
       <div class="setup-section">
         <div class="section-header">
-          <span class="section-title">Select survey targets</span>
+          <span class="section-title">설문 대상 선택</span>
           <span class="selection-count">Selected {{ selectedAgents.size }} / {{ profiles.length }}</span>
         </div>
         <div class="agents-grid">
@@ -32,21 +32,21 @@
           </label>
         </div>
         <div class="selection-actions">
-          <button class="action-link" @click="$emit('select-all')">Select all</button>
+          <button class="action-link" @click="$emit('select-all')">전체 선택</button>
           <span class="action-divider">|</span>
-          <button class="action-link" @click="$emit('clear-selection')">Clear</button>
+          <button class="action-link" @click="$emit('clear-selection')">선택 해제</button>
         </div>
       </div>
 
       <div class="setup-section">
         <div class="section-header">
-          <span class="section-title">Survey question</span>
+          <span class="section-title">설문 질문</span>
         </div>
         <textarea
           :value="surveyQuestion"
           @input="$emit('update:surveyQuestion', $event.target.value)"
           class="survey-input"
-          placeholder="Enter the question you want to ask all selected targets..."
+          placeholder="선택한 모든 대상에게 묻고 싶은 질문을 입력하세요..."
           rows="3"
         ></textarea>
       </div>
@@ -57,14 +57,14 @@
         @click="$emit('submit')"
       >
         <span v-if="isSurveying" class="loading-spinner"></span>
-        <span v-else>Send survey</span>
+        <span v-else>설문 전송</span>
       </button>
     </div>
 
     <!-- Survey Results -->
     <div v-if="surveyResults.length > 0" class="survey-results">
       <div class="results-header">
-        <span class="results-title">Survey results</span>
+        <span class="results-title">설문 결과</span>
         <span class="results-count">{{ surveyResults.length }} responses</span>
       </div>
       <div class="results-list">

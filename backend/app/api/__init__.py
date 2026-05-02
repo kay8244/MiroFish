@@ -15,3 +15,6 @@ from . import report  # noqa: E402, F401
 # Pipeline orchestrator blueprint (신규, SK실트론 Si 웨이퍼 MVP)
 # 기존 blueprint와 독립. api/simulation.py에는 영향 없음.
 from .pipeline import pipeline_bp  # noqa: E402, F401
+
+# 인증 블루프린트 (Phase 9)
+from .auth import auth_bp  # noqa: E402, F401

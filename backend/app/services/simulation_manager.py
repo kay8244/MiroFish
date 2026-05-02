@@ -7,6 +7,7 @@ Twitter와 Reddit 양대 플랫폼 병렬 시뮬레이션 관리
 import os
 import json
 import shutil
+from collections import OrderedDict
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -14,7 +15,7 @@ from enum import Enum
 
 from ..config import Config
 from ..utils.logger import get_logger
-from .zep_entity_reader import ZepEntityReader, FilteredEntities
+from .graphiti_entity_reader import GraphitiEntityReader, FilteredEntities
 from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
 
@@ -73,6 +74,12 @@ class SimulationState:
     enable_twitter: bool = True
     enable_reddit: bool = True
 
+    # B 시나리오: 이 시뮬레이션에만 적용되는 requirement 오버라이드.
+    # None 이면 project.simulation_requirement 사용 (기존 동작).
+    # 값이 있으면 prepare/generate/chat 에서 우선 사용 → 같은 graph 위에
+    # 여러 시나리오를 독립된 시뮬로 돌릴 수 있음.
+    simulation_requirement: Optional[str] = None
+
     # 상태
     status: SimulationStatus = SimulationStatus.CREATED
 
@@ -105,6 +112,7 @@ class SimulationState:
             "graph_id": self.graph_id,
             "enable_twitter": self.enable_twitter,
             "enable_reddit": self.enable_reddit,
+            "simulation_requirement": self.simulation_requirement,
             "status": self.status.value,
             "entities_count": self.entities_count,
             "profiles_count": self.profiles_count,
@@ -151,12 +159,25 @@ class SimulationManager:
         '../../uploads/simulations'
     )
 
+    # 메모리 캐시 크기 한도 (LRU 축출). 분기당 수백 run 누적되어도 메모리 누수
+    # 없이 최근 사용된 N개만 유지. 환경변수로 override 가능.
+    MAX_CACHE_SIZE = int(os.environ.get('SIMULATION_CACHE_SIZE', '128'))
+
     def __init__(self):
         # 디렉토리 존재 확인
         os.makedirs(self.SIMULATION_DATA_DIR, exist_ok=True)
 
-        # 메모리 내 시뮬레이션 상태 캐시
-        self._simulations: Dict[str, SimulationState] = {}
+        # 메모리 내 시뮬레이션 상태 캐시 — OrderedDict 으로 LRU 축출
+        self._simulations: "OrderedDict[str, SimulationState]" = OrderedDict()
+
+    def _cache_set(self, simulation_id: str, state: SimulationState) -> None:
+        """캐시에 등록 + LRU 축출 (단일 진입점)."""
+        if simulation_id in self._simulations:
+            self._simulations.move_to_end(simulation_id)
+        self._simulations[simulation_id] = state
+        # 디스크 영속화 후 캐시는 LRU 한도만 유지 — 메모리 누수 방어선.
+        while len(self._simulations) > self.MAX_CACHE_SIZE:
+            self._simulations.popitem(last=False)
 
     def _get_simulation_dir(self, simulation_id: str) -> str:
         """시뮬레이션 데이터 디렉토리 가져오기"""
@@ -173,11 +194,13 @@ class SimulationManager:
 
         _atomic_write_json(state_file, state.to_dict())
 
-        self._simulations[state.simulation_id] = state
+        self._cache_set(state.simulation_id, state)
 
     def _load_simulation_state(self, simulation_id: str) -> Optional[SimulationState]:
         """파일에서 시뮬레이션 상태 불러오기"""
         if simulation_id in self._simulations:
+            # LRU: 캐시 히트 시 가장 최근 사용으로 갱신
+            self._simulations.move_to_end(simulation_id)
             return self._simulations[simulation_id]
 
         sim_dir = self._get_simulation_dir(simulation_id)
@@ -195,6 +218,7 @@ class SimulationManager:
             graph_id=data.get("graph_id", ""),
             enable_twitter=data.get("enable_twitter", True),
             enable_reddit=data.get("enable_reddit", True),
+            simulation_requirement=data.get("simulation_requirement"),
             status=SimulationStatus(data.get("status", "created")),
             entities_count=data.get("entities_count", 0),
             profiles_count=data.get("profiles_count", 0),
@@ -209,7 +233,7 @@ class SimulationManager:
             error=data.get("error"),
         )
 
-        self._simulations[simulation_id] = state
+        self._cache_set(simulation_id, state)
         return state
 
     def create_simulation(
@@ -218,6 +242,7 @@ class SimulationManager:
         graph_id: str,
         enable_twitter: bool = True,
         enable_reddit: bool = True,
+        simulation_requirement: Optional[str] = None,
     ) -> SimulationState:
         """
         새 시뮬레이션 생성
@@ -227,6 +252,8 @@ class SimulationManager:
             graph_id: Zep 그래프 ID
             enable_twitter: Twitter 시뮬레이션 활성화 여부
             enable_reddit: Reddit 시뮬레이션 활성화 여부
+            simulation_requirement: 시나리오 질문 오버라이드 (B 시나리오).
+                None 이면 project.simulation_requirement 기본값 사용.
 
         Returns:
             SimulationState
@@ -240,6 +267,7 @@ class SimulationManager:
             graph_id=graph_id,
             enable_twitter=enable_twitter,
             enable_reddit=enable_reddit,
+            simulation_requirement=simulation_requirement,
             status=SimulationStatus.CREATED,
         )
 
@@ -294,7 +322,7 @@ class SimulationManager:
             if progress_callback:
                 progress_callback("reading", 0, "Zep 그래프에 연결 중...")
 
-            reader = ZepEntityReader()
+            reader = GraphitiEntityReader()
 
             if progress_callback:
                 progress_callback("reading", 30, "노드 데이터 읽는 중...")

@@ -1,22 +1,52 @@
 """
-Zep 그래프 메모리 업데이트 서비스
-시뮬레이션 중 Agent 활동을 Zep 그래프에 동적으로 업데이트
+Graphiti 그래프 메모리 업데이트 서비스 (Phase 5).
+
+`GraphitiGraphMemoryUpdater`/`GraphitiGraphMemoryManager`와 동일한 public API. 백엔드는
+Graphiti(Neo4j)로 교체. 호출부(simulation_runner.py, services/__init__.py) 0
+수정. zep shim에서 alias로 재노출.
+
+시뮬레이션 중 Agent 활동(actions.jsonl)을 백그라운드 워커가 플랫폼별 BATCH_SIZE
+단위로 묶어 그래프 episode로 추가한다.
+
+구현 변경점 (vs zep_graph_memory_updater):
+- `client.graph.add(graph_id, type="text", data=text)` → `_run_async(graphiti.
+  add_episode(name=..., episode_body=text, source=EpisodeType.text,
+  source_description=..., reference_time=now, group_id=gid))`
+- Graphiti 인스턴스 lazy init + close (동일 패턴 graphiti_tools).
 """
 
+import asyncio
 import os
 import time
 import threading
 import json
 from typing import Dict, Any, List, Optional, Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from queue import Queue, Empty
 
 from ..config import Config
-from ..utils.zep_client import create_zep_client
+from ..utils.graphiti_client import create_graphiti
 from ..utils.logger import get_logger
 
-logger = get_logger('mirofish.zep_graph_memory_updater')
+logger = get_logger('mirofish.graphiti_graph_memory_updater')
+
+
+def _run_async(coro):
+    """동기 컨텍스트에서 async coroutine 실행. 워커 스레드 내부 호출용.
+
+    워커 루프는 Python thread → asyncio loop가 없는 컨텍스트 → asyncio.run 안전.
+    이미 loop 중이면 별도 스레드의 새 루프 위임.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is not None:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    return asyncio.run(coro)
 
 
 @dataclass
@@ -197,7 +227,7 @@ class AgentActivity:
         return f"{self.action_type} 작업을 수행했습니다"
 
 
-class ZepGraphMemoryUpdater:
+class GraphitiGraphMemoryUpdater:
     """
     Zep 그래프 메모리 업데이터
 
@@ -228,21 +258,21 @@ class ZepGraphMemoryUpdater:
     MAX_RETRIES = 3
     RETRY_DELAY = 2  # 초
 
-    def __init__(self, graph_id: str, api_key: Optional[str] = None):
+    def __init__(self, graph_id: str, api_key: Optional[str] = None, graphiti=None):
         """
         업데이터 초기화
 
         Args:
-            graph_id: Zep 그래프 ID
-            api_key: Zep API Key (선택 사항, 기본값은 설정에서 읽음)
+            graph_id: 그래프 ID (Graphiti group_id로 사용)
+            api_key: 하위 호환 인자 (실제 사용 안 함). Zep 시절 시그니처 유지용.
+            graphiti: 외부 주입 Graphiti 인스턴스 (테스트용). None이면 lazy init.
         """
+        # api_key는 무시 — Graphiti는 OPENAI_API_KEY 환경변수 사용
+        _ = api_key
+
         self.graph_id = graph_id
-        self.api_key = api_key or Config.ZEP_API_KEY
-
-        if not self.api_key:
-            raise ValueError("ZEP_API_KEY가 설정되지 않았습니다")
-
-        self.client = create_zep_client(api_key=self.api_key)
+        self._graphiti = graphiti
+        self._owns_graphiti = graphiti is None  # lazy init in _ensure_graphiti
 
         # 활동 큐
         self._activity_queue: Queue = Queue()
@@ -265,7 +295,23 @@ class ZepGraphMemoryUpdater:
         self._failed_count = 0      # 전송 실패한 배치 수
         self._skipped_count = 0     # 필터링으로 건너뛴 활동 수 (DO_NOTHING)
 
-        logger.info(f"ZepGraphMemoryUpdater 초기화 완료: graph_id={graph_id}, batch_size={self.BATCH_SIZE}")
+        logger.info(f"GraphitiGraphMemoryUpdater 초기화 완료: graph_id={graph_id}, batch_size={self.BATCH_SIZE}")
+
+    def _ensure_graphiti(self):
+        """Graphiti 인스턴스 lazy init. 첫 _send_batch_activities 호출 시점에 생성."""
+        if self._graphiti is None:
+            self._graphiti = create_graphiti()
+            self._owns_graphiti = True
+        return self._graphiti
+
+    def close(self) -> None:
+        """소유한 Graphiti 인스턴스 정리. 외부 주입 인스턴스는 건드리지 않음."""
+        if self._owns_graphiti and self._graphiti is not None:
+            try:
+                _run_async(self._graphiti.close())
+            except Exception:  # noqa: BLE001
+                pass
+            self._graphiti = None
 
     def _get_platform_display_name(self, platform: str) -> str:
         """플랫폼 표시 이름 가져오기"""
@@ -283,7 +329,7 @@ class ZepGraphMemoryUpdater:
             name=f"ZepMemoryUpdater-{self.graph_id[:8]}"
         )
         self._worker_thread.start()
-        logger.info(f"ZepGraphMemoryUpdater 시작됨: graph_id={self.graph_id}")
+        logger.info(f"GraphitiGraphMemoryUpdater 시작됨: graph_id={self.graph_id}")
 
     def stop(self):
         """백그라운드 워커 스레드 중지"""
@@ -295,12 +341,15 @@ class ZepGraphMemoryUpdater:
         if self._worker_thread and self._worker_thread.is_alive():
             self._worker_thread.join(timeout=10)
 
-        logger.info(f"ZepGraphMemoryUpdater 중지됨: graph_id={self.graph_id}, "
+        logger.info(f"GraphitiGraphMemoryUpdater 중지됨: graph_id={self.graph_id}, "
                    f"total_activities={self._total_activities}, "
                    f"batches_sent={self._total_sent}, "
                    f"items_sent={self._total_items_sent}, "
                    f"failed={self._failed_count}, "
                    f"skipped={self._skipped_count}")
+
+        # graphiti 인스턴스가 owns이면 정리
+        self.close()
 
     def add_activity(self, activity: AgentActivity):
         """
@@ -402,14 +451,31 @@ class ZepGraphMemoryUpdater:
         episode_texts = [activity.to_episode_text() for activity in activities]
         combined_text = "\n".join(episode_texts)
 
+        # EpisodeType import는 graphiti-core 버전 따라 위치 다름. graceful fallback.
+        source = None
+        try:
+            from graphiti_core.nodes import EpisodeType  # type: ignore
+            source = EpisodeType.text
+        except ImportError:
+            pass
+
+        graphiti = self._ensure_graphiti()
+        reference_time = datetime.now(timezone.utc)
+        episode_name = f"agent-activity-{platform}-{int(time.time() * 1000)}"
+
         # 재시도 포함 전송
         for attempt in range(self.MAX_RETRIES):
             try:
-                self.client.graph.add(
-                    graph_id=self.graph_id,
-                    type="text",
-                    data=combined_text
+                kwargs: Dict[str, Any] = dict(
+                    name=episode_name,
+                    episode_body=combined_text,
+                    source_description=f"agent activity batch ({platform})",
+                    reference_time=reference_time,
+                    group_id=self.graph_id,
                 )
+                if source is not None:
+                    kwargs["source"] = source
+                _run_async(graphiti.add_episode(**kwargs))
 
                 self._total_sent += 1
                 self._total_items_sent += len(activities)
@@ -420,10 +486,10 @@ class ZepGraphMemoryUpdater:
 
             except Exception as e:
                 if attempt < self.MAX_RETRIES - 1:
-                    logger.warning(f"Zep에 일괄 전송 실패 (시도 {attempt + 1}/{self.MAX_RETRIES}): {e}")
+                    logger.warning(f"Graphiti 일괄 전송 실패 (시도 {attempt + 1}/{self.MAX_RETRIES}): {e}")
                     time.sleep(self.RETRY_DELAY * (attempt + 1))
                 else:
-                    logger.error(f"Zep에 일괄 전송 실패, {self.MAX_RETRIES}회 재시도 후 포기: {e}")
+                    logger.error(f"Graphiti 일괄 전송 실패, {self.MAX_RETRIES}회 재시도 후 포기: {e}")
                     self._failed_count += 1
 
     def _flush_remaining(self):
@@ -470,18 +536,18 @@ class ZepGraphMemoryUpdater:
         }
 
 
-class ZepGraphMemoryManager:
+class GraphitiGraphMemoryManager:
     """
     여러 시뮬레이션의 Zep 그래프 메모리 업데이터를 관리
 
     각 시뮬레이션은 자체 업데이터 인스턴스를 가질 수 있음
     """
 
-    _updaters: Dict[str, ZepGraphMemoryUpdater] = {}
+    _updaters: Dict[str, GraphitiGraphMemoryUpdater] = {}
     _lock = threading.Lock()
 
     @classmethod
-    def create_updater(cls, simulation_id: str, graph_id: str) -> ZepGraphMemoryUpdater:
+    def create_updater(cls, simulation_id: str, graph_id: str) -> GraphitiGraphMemoryUpdater:
         """
         시뮬레이션을 위한 그래프 메모리 업데이터 생성
 
@@ -490,14 +556,14 @@ class ZepGraphMemoryManager:
             graph_id: Zep 그래프 ID
 
         Returns:
-            ZepGraphMemoryUpdater 인스턴스
+            GraphitiGraphMemoryUpdater 인스턴스
         """
         with cls._lock:
             # 이미 존재하는 경우 기존 업데이터 중지
             if simulation_id in cls._updaters:
                 cls._updaters[simulation_id].stop()
 
-            updater = ZepGraphMemoryUpdater(graph_id)
+            updater = GraphitiGraphMemoryUpdater(graph_id)
             updater.start()
             cls._updaters[simulation_id] = updater
 
@@ -505,7 +571,7 @@ class ZepGraphMemoryManager:
             return updater
 
     @classmethod
-    def get_updater(cls, simulation_id: str) -> Optional[ZepGraphMemoryUpdater]:
+    def get_updater(cls, simulation_id: str) -> Optional[GraphitiGraphMemoryUpdater]:
         """시뮬레이션의 업데이터 가져오기"""
         return cls._updaters.get(simulation_id)
 

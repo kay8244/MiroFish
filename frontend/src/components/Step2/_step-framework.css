@@ -1,0 +1,78 @@
+/* Shared step-card framework — imported by every Step2 sub-component. */
+
+.step-card {
+  background: #FFF;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  border: 1px solid #EAEAEA;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.step-card.active {
+  border-color: #FF5722;
+  box-shadow: 0 4px 12px rgba(255, 87, 34, 0.08);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.step-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.step-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 700;
+  color: #E0E0E0;
+}
+
+.step-card.active .step-num,
+.step-card.completed .step-num {
+  color: #000;
+}
+
+.step-title {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge.success { background: #E8F5E9; color: #2E7D32; }
+.badge.processing { background: #FF5722; color: #FFF; }
+.badge.pending { background: #F5F5F5; color: #999; }
+.badge.accent { background: #E3F2FD; color: #1565C0; }
+
+.card-content {
+  /* No extra padding - uses step-card's padding */
+}
+
+.api-note {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: #999;
+  margin-bottom: 8px;
+}
+
+.description {
+  font-size: 12px;
+  color: #666;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}

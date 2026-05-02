@@ -1,14 +1,14 @@
 <template>
   <div class="graph-panel">
     <div class="panel-header">
-      <span class="panel-title">Graph Relationship Visualization</span>
+      <span class="panel-title">그래프 관계 시각화</span>
       <!-- Top toolbar (Internal Top Right) -->
       <div class="header-tools">
-        <button class="tool-btn" @click="$emit('refresh')" :disabled="loading" title="Refresh graph">
+        <button class="tool-btn" @click="$emit('refresh')" :disabled="loading" title="그래프 새로고침">
           <span class="icon-refresh" :class="{ 'spinning': loading }">↻</span>
-          <span class="btn-text">Refresh</span>
+          <span class="btn-text">새로고침</span>
         </button>
-        <button class="tool-btn" @click="$emit('toggle-maximize')" title="Maximize/Restore">
+        <button class="tool-btn" @click="$emit('toggle-maximize')" title="최대화/복원">
           <span class="icon-maximize">⛶</span>
         </button>
       </div>
@@ -39,7 +39,7 @@
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
           </div>
-          <span class="hint-text">A small amount of content is still processing. Consider refreshing the graph manually later.</span>
+          <span class="hint-text">일부 콘텐츠가 처리 중입니다. 잠시 후 수동으로 새로고침해 주세요.</span>
           <button class="hint-close-btn" @click="dismissFinishedHint" title="Dismiss">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -203,19 +203,19 @@
       <!-- Loading state -->
       <div v-else-if="loading" class="graph-state">
         <div class="loading-spinner"></div>
-        <p>Loading graph data...</p>
+        <p>그래프 데이터 로딩 중...</p>
       </div>
 
       <!-- Waiting/empty state -->
       <div v-else class="graph-state">
         <div class="empty-icon">❖</div>
-        <p class="empty-text">Waiting for ontology generation...</p>
+        <p class="empty-text">온톨로지 생성 대기 중...</p>
       </div>
     </div>
 
     <!-- Bottom legend (Bottom Left) -->
     <div v-if="graphData && entityTypes.length" class="graph-legend">
-      <span class="legend-title">Entity Types</span>
+      <span class="legend-title">엔티티 타입</span>
       <div class="legend-items">
         <div class="legend-item" v-for="type in entityTypes" :key="type.name">
           <span class="legend-dot" :style="{ background: type.color }"></span>
@@ -230,7 +230,7 @@
         <input type="checkbox" v-model="showEdgeLabels" />
         <span class="slider"></span>
       </label>
-      <span class="toggle-label">Show Edge Labels</span>
+      <span class="toggle-label">엣지 라벨 표시</span>
     </div>
   </div>
 </template>

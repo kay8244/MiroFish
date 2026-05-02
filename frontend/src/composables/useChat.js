@@ -1,7 +1,40 @@
 import { ref, nextTick } from 'vue'
 import { chatWithReport } from '../api/report'
-import { interviewAgents } from '../api/simulation'
+import { interviewAgents, startSimulation, getRunStatus } from '../api/simulation'
 import { debounce } from '../utils/api-helpers'
+
+// Detect backend "env not alive" error on stopped/completed sims.
+// Matches the Korean message returned by /api/simulation/interview/batch.
+const isEnvNotAliveError = (err) => {
+  const msg = err?.response?.data?.error || err?.message || ''
+  return /시뮬레이션 환경이 실행 중이 아니거나|환경.*종료|env.*not.*alive/i.test(msg)
+}
+
+// DESTRUCTIVE: force-restart the sim — backend cleans prior run state,
+// action logs, and simulation DB artifacts before restart, and clamps
+// rounds to 6. Callers MUST obtain explicit user consent before invoking.
+const reviveEnv = async (simId, addLog) => {
+  addLog(`시뮬레이션 환경 재시작 중... (sim=${simId})`)
+  await startSimulation({ simulation_id: simId, max_rounds: 6, force: true })
+  const deadline = Date.now() + 90_000  // 90s cap — 6 rounds normally completes in <30s
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 2000))
+    let st
+    try {
+      const res = await getRunStatus(simId)
+      st = res?.data?.runner_status
+    } catch (e) {
+      // transient polling error — keep polling until deadline
+      continue
+    }
+    if (st === 'completed') {
+      addLog('환경 재시작 완료 — 재질문 시도')
+      return
+    }
+    if (st === 'failed') throw new Error('환경 재시작 실패')
+  }
+  throw new Error('환경 재시작 타임아웃')
+}
 
 /**
  * Chat state and logic composable for Step5 interaction.
@@ -101,13 +134,41 @@ export function useChat({ simulationId, addLog, selectedAgent, selectedAgentInde
       prompt = `Here is our previous conversation:\n${historyContext}\n\nMy new question is: ${message}`
     }
 
-    const res = await interviewAgents({
+    const interviewPayload = {
       simulation_id: simulationId.value,
       interviews: [{
         agent_id: selectedAgentIndex.value,
         prompt: prompt
       }]
-    })
+    }
+    let res
+    try {
+      res = await interviewAgents(interviewPayload)
+    } catch (err) {
+      if (isEnvNotAliveError(err)) {
+        // Explicit user consent required: force-restart is destructive —
+        // prior run state, action logs, and simulation DB artifacts are
+        // cleared, and rounds are clamped to 6. Silently auto-restarting
+        // would mutate the world state existing reports were based on.
+        const ok = typeof window !== 'undefined' && window.confirm
+          ? window.confirm(
+              '시뮬레이션 환경이 종료되었습니다. 재시작하시겠습니까?\n\n' +
+              '⚠️ 경고: 재시작은 파괴적입니다.\n' +
+              '- 기존 run 상태, 액션 로그, 시뮬레이션 DB 아티팩트가 초기화됩니다\n' +
+              '- 이전 리포트의 근거 데이터가 변경될 수 있습니다\n' +
+              '- 라운드 수는 6으로 축소됩니다'
+            )
+          : false
+        if (!ok) {
+          addLog('재시작 취소됨 — 환경이 종료된 상태로 유지')
+          throw err
+        }
+        await reviveEnv(simulationId.value, addLog)
+        res = await interviewAgents(interviewPayload)
+      } else {
+        throw err
+      }
+    }
 
     if (res.success && res.data) {
       const resultData = res.data.result || res.data

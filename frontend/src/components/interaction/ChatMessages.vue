@@ -50,7 +50,7 @@
     <textarea
       v-model="localInput"
       class="chat-input"
-      placeholder="Type your question..."
+      placeholder="질문을 입력하세요..."
       @keydown.enter.exact.prevent="$emit('send')"
       :disabled="isSending || (!selectedAgent && chatTarget === 'agent')"
       rows="1"

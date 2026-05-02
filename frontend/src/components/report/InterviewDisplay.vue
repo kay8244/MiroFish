@@ -3,17 +3,17 @@
     <!-- Header Section -->
     <div class="interview-header">
       <div class="header-main">
-        <div class="header-title">Agent Interview</div>
+        <div class="header-title">에이전트 인터뷰</div>
         <div class="header-stats">
           <span class="stat-item">
             <span class="stat-value">{{ result.successCount || result.interviews.length }}</span>
-            <span class="stat-label">Interviewed</span>
+            <span class="stat-label">인터뷰 완료</span>
           </span>
           <template v-if="result.totalCount > 0">
             <span class="stat-divider">/</span>
             <span class="stat-item">
               <span class="stat-value">{{ result.totalCount }}</span>
-              <span class="stat-label">Total</span>
+              <span class="stat-label">전체</span>
             </span>
           </template>
           <template v-if="resultLength">
@@ -52,7 +52,7 @@
 
       <!-- Selection Reason -->
       <div v-if="currentInterview?.selectionReason" class="selection-reason">
-        <div class="reason-label">Selection Reason</div>
+        <div class="reason-label">선택 이유</div>
         <div class="reason-content">{{ currentInterview.selectionReason }}</div>
       </div>
 
@@ -63,7 +63,7 @@
           <div class="qa-question">
             <div class="qa-badge q-badge">Q{{ qIdx + 1 }}</div>
             <div class="qa-content">
-              <div class="qa-sender">Interviewer</div>
+              <div class="qa-sender">인터뷰어</div>
               <div class="qa-text">{{ question }}</div>
             </div>
           </div>
@@ -119,7 +119,7 @@
 
       <!-- Key Quotes Section -->
       <div v-if="currentInterview?.quotes?.length > 0" class="quotes-section">
-        <div class="quotes-header">Key Quotes</div>
+        <div class="quotes-header">핵심 인용</div>
         <div class="quotes-list">
           <blockquote
             v-for="(quote, qi) in currentInterview.quotes.slice(0, 3)"
@@ -133,7 +133,7 @@
 
     <!-- Summary Section -->
     <div v-if="result.summary" class="summary-section">
-      <div class="summary-header">Interview Summary</div>
+      <div class="summary-header">인터뷰 요약</div>
       <div
         class="summary-content"
         v-html="renderMarkdown(result.summary.length > 500 ? result.summary.substring(0, 500) + '...' : result.summary)"

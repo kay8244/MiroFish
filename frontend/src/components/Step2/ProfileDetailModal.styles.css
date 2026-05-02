@@ -1,0 +1,266 @@
+/* Profile Modal */
+.profile-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.profile-modal {
+  background: #FFF;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 24px;
+  background: #FFF;
+  border-bottom: 1px solid #F0F0F0;
+}
+
+.modal-header-info {
+  flex: 1;
+}
+
+.modal-name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.modal-realname {
+  font-size: 20px;
+  font-weight: 700;
+  color: #000;
+}
+
+.modal-username {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  color: #999;
+}
+
+.modal-profession {
+  font-size: 12px;
+  color: #666;
+  background: #F5F5F5;
+  padding: 4px 10px;
+  border-radius: 4px;
+  display: inline-block;
+  font-weight: 500;
+}
+
+.close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: #999;
+  border-radius: 50%;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: color 0.2s;
+  padding: 0;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Basic Info Grid */
+.modal-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px 16px;
+  margin-bottom: 32px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-label {
+  font-size: 11px;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.info-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.info-value.mbti {
+  font-family: 'JetBrains Mono', monospace;
+  color: #FF5722;
+}
+
+/* Modal Section */
+.modal-section {
+  margin-bottom: 28px;
+}
+
+.section-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+}
+
+.section-bio {
+  font-size: 14px;
+  color: #333;
+  line-height: 1.6;
+  margin: 0;
+  padding: 16px;
+  background: #F9F9F9;
+  border-radius: 6px;
+  border-left: 3px solid #E0E0E0;
+}
+
+/* Topic Tags */
+.topics-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.topic-item {
+  font-size: 11px;
+  color: #1565C0;
+  background: #E3F2FD;
+  padding: 4px 10px;
+  border-radius: 12px;
+  transition: all 0.2s;
+  border: none;
+}
+
+.topic-item:hover {
+  background: #BBDEFB;
+  color: #0D47A1;
+}
+
+/* Detailed Profile */
+.persona-dimensions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dimension-card {
+  background: #F8F9FA;
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 3px solid #DDD;
+  transition: all 0.2s;
+}
+
+.dimension-card:hover {
+  background: #F0F0F0;
+  border-left-color: #999;
+}
+
+.dim-title {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.dim-desc {
+  display: block;
+  font-size: 10px;
+  color: #888;
+  line-height: 1.4;
+}
+
+.persona-content {
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.persona-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.persona-content::-webkit-scrollbar-thumb {
+  background: #DDD;
+  border-radius: 2px;
+}
+
+.section-persona {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.8;
+  margin: 0;
+  text-align: justify;
+}
+
+/* Modal Transition */
+.modal-enter-active,
+.modal-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-active .profile-modal {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-leave-active .profile-modal {
+  transition: all 0.3s ease-in;
+}
+
+.modal-enter-from .profile-modal,
+.modal-leave-to .profile-modal {
+  transform: scale(0.95) translateY(10px);
+  opacity: 0;
+}

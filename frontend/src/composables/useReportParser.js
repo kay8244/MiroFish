@@ -229,3 +229,187 @@ export function parseQuickSearch(text) {
 
   return result
 }
+
+export function parseInterview(text) {
+  const result = {
+    topic: '',
+    agentCount: '',
+    successCount: 0,
+    totalCount: 0,
+    selectionReason: '',
+    interviews: [],
+    summary: ''
+  }
+
+  try {
+    const topicMatch = text.match(/\*\*Interview Topic:\*\*\s*(.+?)(?:\n|$)/)
+    if (topicMatch) result.topic = topicMatch[1].trim()
+
+    const countMatch = text.match(/\*\*Interviewed:\*\*\s*(\d+)\s*\/\s*(\d+)/)
+    if (countMatch) {
+      result.successCount = parseInt(countMatch[1])
+      result.totalCount = parseInt(countMatch[2])
+      result.agentCount = `${countMatch[1]} / ${countMatch[2]}`
+    }
+
+    const reasonMatch = text.match(/### Selection Reason for Interviewees\n([\s\S]*?)(?=\n---\n|\n### Interview Records)/)
+    if (reasonMatch) {
+      result.selectionReason = reasonMatch[1].trim()
+    }
+
+    const parseIndividualReasons = (reasonText) => {
+      const reasons = {}
+      if (!reasonText) return reasons
+
+      const lines = reasonText.split(/\n+/)
+      let currentName = null
+      let currentReason = []
+
+      for (const line of lines) {
+        let headerMatch = null
+        let name = null
+        let reasonStart = null
+
+        headerMatch = line.match(/^\d+\.\s*\*\*([^*（(]+)(?:[（(]index\s*=?\s*\d+[)）])?\*\*[：:]\s*(.*)/)
+        if (headerMatch) {
+          name = headerMatch[1].trim()
+          reasonStart = headerMatch[2]
+        }
+
+        if (!headerMatch) {
+          headerMatch = line.match(/^-\s*(?:选择|Select)([^（(]+)(?:[（(]index\s*=?\s*\d+[)）])?[：:]\s*(.*)/)
+          if (headerMatch) {
+            name = headerMatch[1].trim()
+            reasonStart = headerMatch[2]
+          }
+        }
+
+        if (!headerMatch) {
+          headerMatch = line.match(/^-\s*\*\*([^*（(]+)(?:[（(]index\s*=?\s*\d+[)）])?\*\*[：:]\s*(.*)/)
+          if (headerMatch) {
+            name = headerMatch[1].trim()
+            reasonStart = headerMatch[2]
+          }
+        }
+
+        if (name) {
+          if (currentName && currentReason.length > 0) {
+            reasons[currentName] = currentReason.join(' ').trim()
+          }
+          currentName = name
+          currentReason = reasonStart ? [reasonStart.trim()] : []
+        } else if (currentName && line.trim() && !line.match(/^未选|^综上|^最终选择|^Not selected|^In summary|^Final selection/)) {
+          currentReason.push(line.trim())
+        }
+      }
+
+      if (currentName && currentReason.length > 0) {
+        reasons[currentName] = currentReason.join(' ').trim()
+      }
+
+      return reasons
+    }
+
+    const individualReasons = parseIndividualReasons(result.selectionReason)
+
+    const interviewBlocks = text.split(/#### Interview #\d+:/).slice(1)
+
+    interviewBlocks.forEach((block, index) => {
+      const interview = {
+        num: index + 1,
+        title: '',
+        name: '',
+        role: '',
+        bio: '',
+        selectionReason: '',
+        questions: [],
+        twitterAnswer: '',
+        redditAnswer: '',
+        quotes: []
+      }
+
+      const titleMatch = block.match(/^(.+?)\n/)
+      if (titleMatch) interview.title = titleMatch[1].trim()
+
+      const nameRoleMatch = block.match(/\*\*(.+?)\*\*\s*\((.+?)\)/)
+      if (nameRoleMatch) {
+        interview.name = nameRoleMatch[1].trim()
+        interview.role = nameRoleMatch[2].trim()
+        interview.selectionReason = individualReasons[interview.name] || ''
+      }
+
+      const bioMatch = block.match(/_(?:简介|Bio):\s*([\s\S]*?)_\n/)
+      if (bioMatch) {
+        interview.bio = bioMatch[1].trim().replace(/\.\.\.$/, '...')
+      }
+
+      const qMatch = block.match(/\*\*Q:\*\*\s*([\s\S]*?)(?=\n\n\*\*A:\*\*|\*\*A:\*\*)/)
+      if (qMatch) {
+        const qText = qMatch[1].trim()
+        const questions = qText.split(/\n\d+\.\s+/).filter(q => q.trim())
+        if (questions.length > 0) {
+          const firstQ = qText.match(/^1\.\s+(.+)/)
+          if (firstQ) {
+            interview.questions = [firstQ[1].trim(), ...questions.slice(1).map(q => q.trim())]
+          } else {
+            interview.questions = questions.map(q => q.trim())
+          }
+        }
+      }
+
+      const answerMatch = block.match(/\*\*A:\*\*\s*([\s\S]*?)(?=\*\*(?:关键引言|Key Quotes)|$)/)
+      if (answerMatch) {
+        const answerText = answerMatch[1].trim()
+
+        const twitterMatch = answerText.match(/[Twitter Platform Answer]\n?([\s\S]*?)(?=[Reddit Platform Answer]|$)/)
+        const redditMatch = answerText.match(/[Reddit Platform Answer]\n?([\s\S]*?)$/)
+
+        if (twitterMatch) {
+          interview.twitterAnswer = twitterMatch[1].trim()
+        }
+        if (redditMatch) {
+          interview.redditAnswer = redditMatch[1].trim()
+        }
+
+        if (!twitterMatch && redditMatch) {
+          if (interview.redditAnswer && interview.redditAnswer !== '(No reply from this platform)') {
+            interview.twitterAnswer = interview.redditAnswer
+          }
+        } else if (twitterMatch && !redditMatch) {
+          if (interview.twitterAnswer && interview.twitterAnswer !== '(No reply from this platform)') {
+            interview.redditAnswer = interview.twitterAnswer
+          }
+        } else if (!twitterMatch && !redditMatch) {
+          interview.twitterAnswer = answerText
+        }
+      }
+
+      const quotesMatch = block.match(/\*\*Key Quotes:\*\*\n([\s\S]*?)(?=\n---|\n####|$)/)
+      if (quotesMatch) {
+        const quotesText = quotesMatch[1]
+        let quoteMatches = quotesText.match(/> "([^"]+)"/g)
+        if (!quoteMatches) {
+          quoteMatches = quotesText.match(/> [“""]([^”""]+)[”""]/g)
+        }
+        if (quoteMatches) {
+          interview.quotes = quoteMatches
+            .map(q => q.replace(/^> [“""]|[”""]$/g, '').trim())
+            .filter(q => q)
+        }
+      }
+
+      if (interview.name || interview.title) {
+        result.interviews.push(interview)
+      }
+    })
+
+    const summaryMatch = text.match(/### Interview Summary and Core Viewpoints\n([\s\S]*?)$/)
+    if (summaryMatch) {
+      result.summary = summaryMatch[1].trim()
+    }
+  } catch (e) {
+    console.warn('Parse interview failed:', e)
+  }
+
+  return result
+}

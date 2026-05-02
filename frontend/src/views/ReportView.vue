@@ -23,7 +23,7 @@
       <div class="header-right">
         <div class="workflow-step">
           <span class="step-num">Step 4/5</span>
-          <span class="step-name">Report</span>
+          <span class="step-name">리포트</span>
         </div>
         <div class="step-divider"></div>
         <span class="status-indicator" :class="statusClass">

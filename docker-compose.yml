@@ -6,9 +6,29 @@ services:
     container_name: mirofish
     env_file:
       - .env
+    environment:
+      # TODOS #2: Redis IPC 사용 시 .env 의 REDIS_URL 을 컨테이너 내부 호스트로 매핑.
+      # .env 미설정 시 기존 파일 IPC 로 자동 fallback (호환성).
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     ports:
       - "3000:3000"
       - "5001:5001"
     restart: unless-stopped
     volumes:
       - ./backend/uploads:/app/backend/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # TODOS #2: 시뮬레이션 IPC 큐 (파일 IPC race 해결).
+  # 현재 sync request/response 만 사용 — 영속성 불필요, in-memory 모드.
+  redis:
+    image: redis:7-alpine
+    container_name: mirofish-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

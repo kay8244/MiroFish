@@ -17,7 +17,7 @@
     </div>
     <div v-if="expanded && agent.bio" class="profile-card-body">
       <div class="profile-card-bio">
-        <div class="profile-card-label">Bio</div>
+        <div class="profile-card-label">소개</div>
         <p>{{ agent.bio }}</p>
       </div>
     </div>

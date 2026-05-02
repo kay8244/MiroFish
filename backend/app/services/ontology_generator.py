@@ -4,8 +4,141 @@
 """
 
 import json
+import re
 from typing import Dict, Any, List, Optional
 from ..utils.llm_client import LLMClient
+
+
+# Zep API가 강제하는 명명 규칙을 코드 레이어에서 보장 (LLM이 종종 lowercase로 출력)
+_KNOWN_ENTITY_TYPES = {
+    # fallback
+    "person": "Person",
+    "organization": "Organization",
+    # 개인 (구체)
+    "student": "Student",
+    "professor": "Professor",
+    "journalist": "Journalist",
+    "celebrity": "Celebrity",
+    "executive": "Executive",
+    "official": "Official",
+    "lawyer": "Lawyer",
+    "doctor": "Doctor",
+    "analyst": "Analyst",
+    "investor": "Investor",
+    # 조직 (구체)
+    "university": "University",
+    "company": "Company",
+    "governmentagency": "GovernmentAgency",
+    "mediaoutlet": "MediaOutlet",
+    "hospital": "Hospital",
+    "school": "School",
+    "ngo": "NGO",
+    "tradeassociation": "TradeAssociation",
+    "researchinstitute": "ResearchInstitute",
+}
+
+_KNOWN_EDGE_TYPES = {
+    "worksfor": "WORKS_FOR",
+    "studiesat": "STUDIES_AT",
+    "affiliatedwith": "AFFILIATED_WITH",
+    "represents": "REPRESENTS",
+    "regulates": "REGULATES",
+    "reportson": "REPORTS_ON",
+    "commentson": "COMMENTS_ON",
+    "respondsto": "RESPONDS_TO",
+    "supports": "SUPPORTS",
+    "opposes": "OPPOSES",
+    "collaborateswith": "COLLABORATES_WITH",
+    "competeswith": "COMPETES_WITH",
+    "suppliesto": "SUPPLIES_TO",
+    "investsin": "INVESTS_IN",
+    "partnerswith": "PARTNERS_WITH",
+    "acquires": "ACQUIRES",
+}
+
+
+def _split_words(name: str) -> List[str]:
+    """
+    임의의 이름을 단어 시퀀스로 분해.
+    입력 예: 'mediaoutlet', 'MediaOutlet', 'media_outlet', 'media-outlet',
+             'mediaOutlet', 'MEDIA_OUTLET', 'reports on'
+    """
+    s = name.strip().strip("'\"")
+    # 구분자 기반 분할
+    if re.search(r"[_\-\s]", s):
+        parts = re.split(r"[_\-\s]+", s)
+        return [p for p in parts if p]
+    # camelCase / PascalCase 경계 분할
+    if re.search(r"[A-Z]", s) and re.search(r"[a-z]", s):
+        parts = re.findall(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|\d+", s)
+        if parts:
+            return parts
+    # 단일 토큰 (전부 소문자 또는 전부 대문자) — 통으로 반환
+    return [s]
+
+
+def _normalize_pascal_case(name: str, known_map: Dict[str, str] = None) -> str:
+    """
+    엔티티 유형 이름을 PascalCase로 정규화.
+    - `mediaoutlet` → `MediaOutlet` (known_map 경유)
+    - `media_outlet` → `MediaOutlet`
+    - `mediaOutlet` → `MediaOutlet`
+    - `MediaOutlet` → `MediaOutlet` (변화 없음)
+    - `NGO` → `NGO` (약어 보존 경로 via known_map)
+    """
+    if not name:
+        return name
+    stripped = name.strip().strip("'\"")
+    if not stripped:
+        return stripped
+
+    # 1) 이미 완벽한 PascalCase이면서 known_map에 없으면 그대로
+    # 2) known_map lookup (lowercase 키)
+    km = known_map or _KNOWN_ENTITY_TYPES
+    key = re.sub(r"[_\-\s]+", "", stripped).lower()
+    if key in km:
+        return km[key]
+
+    # 3) 단어 분해 → 각 토큰 첫 글자 대문자화
+    words = _split_words(stripped)
+    out_parts = []
+    for w in words:
+        if not w:
+            continue
+        # 토큰이 전부 대문자이고 길이 <=4이면 약어로 간주해 유지 (예: NGO, CEO, IR)
+        if w.isupper() and 2 <= len(w) <= 4 and w.isalpha():
+            out_parts.append(w)
+        else:
+            out_parts.append(w[:1].upper() + w[1:].lower())
+    result = "".join(out_parts)
+    # 비알파뉴메릭 제거 (안전망)
+    result = re.sub(r"[^A-Za-z0-9]", "", result)
+    return result or stripped
+
+
+def _normalize_upper_snake_case(name: str, known_map: Dict[str, str] = None) -> str:
+    """
+    관계 유형 이름을 UPPER_SNAKE_CASE로 정규화.
+    - `reportson` → `REPORTS_ON` (known_map 경유)
+    - `reportsOn` → `REPORTS_ON`
+    - `reports_on` → `REPORTS_ON`
+    - `REPORTS_ON` → `REPORTS_ON`
+    """
+    if not name:
+        return name
+    stripped = name.strip().strip("'\"")
+    if not stripped:
+        return stripped
+
+    km = known_map or _KNOWN_EDGE_TYPES
+    key = re.sub(r"[_\-\s]+", "", stripped).lower()
+    if key in km:
+        return km[key]
+
+    words = _split_words(stripped)
+    out_parts = [re.sub(r"[^A-Za-z0-9]", "", w).upper() for w in words if w]
+    out_parts = [p for p in out_parts if p]
+    return "_".join(out_parts) or stripped
 
 
 # 온톨로지 생성을 위한 시스템 프롬프트
@@ -69,6 +202,20 @@ ONTOLOGY_SYSTEM_PROMPT = """당신은 전문적인 지식 그래프 온톨로지
     "analysis_summary": "텍스트 내용에 대한 간략한 분석 설명(한국어)"
 }
 ```
+
+## **명명 규칙 — 절대 위반 금지**
+
+Zep API는 이름 규칙을 엄격히 검증합니다. 위반 시 그래프 구축 실패.
+
+**entity_types의 `name`** — 반드시 **PascalCase**:
+- ✅ `MediaOutlet`, `GovernmentAgency`, `Company`, `Person`, `NGO`
+- ❌ `mediaoutlet`, `media_outlet`, `media-outlet`, `mediaOutlet`, `MEDIA_OUTLET`
+
+**edge_types의 `name`** — 반드시 **UPPER_SNAKE_CASE**:
+- ✅ `WORKS_FOR`, `REPORTS_ON`, `SUPPLIES_TO`
+- ❌ `worksFor`, `reports_on`, `works-for`, `WorksFor`
+
+**edge_types의 `source_targets`의 `source`/`target`** — entity_types에 정의된 이름과 **정확히 일치**해야 함(PascalCase 포함).
 
 ## 설계 가이드라인 (매우 중요!)
 
@@ -265,6 +412,36 @@ class OntologyGenerator:
         if "analysis_summary" not in result:
             result["analysis_summary"] = ""
 
+        # === 명명 규칙 정규화 (Zep API 호환) ===
+        # LLM이 lowercase 또는 snake_case로 출력한 이름을 PascalCase(entity) /
+        # UPPER_SNAKE_CASE(edge)로 강제. source_targets 참조도 함께 갱신.
+        entity_rename_map: Dict[str, str] = {}
+        for entity in result["entity_types"]:
+            original = entity.get("name", "")
+            normalized = _normalize_pascal_case(original)
+            if normalized and normalized != original:
+                entity_rename_map[original] = normalized
+                entity["name"] = normalized
+
+        for edge in result["edge_types"]:
+            original = edge.get("name", "")
+            normalized = _normalize_upper_snake_case(original)
+            if normalized and normalized != original:
+                edge["name"] = normalized
+
+            # source_targets 안의 source/target 엔티티 참조도 정규화
+            for st in edge.get("source_targets", []) or []:
+                for key in ("source", "target"):
+                    ref = st.get(key)
+                    if not ref:
+                        continue
+                    # 먼저 entity_rename_map 우선 적용 (LLM이 일관되게 같은 이름 쓴 경우)
+                    if ref in entity_rename_map:
+                        st[key] = entity_rename_map[ref]
+                    else:
+                        # 그렇지 않으면 독립적으로 PascalCase 정규화
+                        st[key] = _normalize_pascal_case(ref)
+
         # 엔티티 유형 검증
         for entity in result["entity_types"]:
             if "attributes" not in entity:
@@ -346,7 +523,11 @@ class OntologyGenerator:
 
     def generate_python_code(self, ontology: Dict[str, Any]) -> str:
         """
-        온톨로지 정의를 Python 코드로 변환 (ontology.py 형식)
+        온톨로지 정의를 Python 코드로 변환 (ontology.py 형식).
+
+        GRAPHITI_MIGRATION_PLAN Phase 1 이후: Graphiti 호환 pydantic BaseModel 생성.
+        zep_cloud.external_clients.ontology import 제거. Graphiti는 어떤 pydantic
+        모델도 entity/edge 유형으로 받아들인다.
 
         Args:
             ontology: 온톨로지 정의
@@ -357,11 +538,11 @@ class OntologyGenerator:
         code_lines = [
             '"""',
             '커스텀 엔티티 유형 정의',
-            'MiroFish에 의해 자동 생성됨, 소셜 여론 시뮬레이션에 사용',
+            'MiroFish에 의해 자동 생성됨, 소셜 여론 시뮬레이션에 사용 (Graphiti 호환)',
             '"""',
             '',
-            'from pydantic import Field',
-            'from zep_cloud.external_clients.ontology import EntityModel, EntityText, EdgeModel',
+            'from typing import Optional',
+            'from pydantic import BaseModel, Field',
             '',
             '',
             '# ============== 엔티티 유형 정의 ==============',
@@ -373,7 +554,7 @@ class OntologyGenerator:
             name = entity["name"]
             desc = entity.get("description", f"A {name} entity.")
 
-            code_lines.append(f'class {name}(EntityModel):')
+            code_lines.append(f'class {name}(BaseModel):')
             code_lines.append(f'    """{desc}"""')
 
             attrs = entity.get("attributes", [])
@@ -381,9 +562,9 @@ class OntologyGenerator:
                 for attr in attrs:
                     attr_name = attr["name"]
                     attr_desc = attr.get("description", attr_name)
-                    code_lines.append(f'    {attr_name}: EntityText = Field(')
+                    code_lines.append(f'    {attr_name}: Optional[str] = Field(')
+                    code_lines.append(f'        default=None,')
                     code_lines.append(f'        description="{attr_desc}",')
-                    code_lines.append(f'        default=None')
                     code_lines.append(f'    )')
             else:
                 code_lines.append('    pass')
@@ -401,7 +582,7 @@ class OntologyGenerator:
             class_name = ''.join(word.capitalize() for word in name.split('_'))
             desc = edge.get("description", f"A {name} relationship.")
 
-            code_lines.append(f'class {class_name}(EdgeModel):')
+            code_lines.append(f'class {class_name}(BaseModel):')
             code_lines.append(f'    """{desc}"""')
 
             attrs = edge.get("attributes", [])
@@ -409,9 +590,9 @@ class OntologyGenerator:
                 for attr in attrs:
                     attr_name = attr["name"]
                     attr_desc = attr.get("description", attr_name)
-                    code_lines.append(f'    {attr_name}: EntityText = Field(')
+                    code_lines.append(f'    {attr_name}: Optional[str] = Field(')
+                    code_lines.append(f'        default=None,')
                     code_lines.append(f'        description="{attr_desc}",')
-                    code_lines.append(f'        default=None')
                     code_lines.append(f'    )')
             else:
                 code_lines.append('    pass')

@@ -1,25 +1,69 @@
 """
-Zep 검색 도구 서비스
-그래프 검색, 노드 조회, 엣지 쿼리 등의 도구를 캡슐화하여 Report Agent에서 사용
+Graphiti 검색 도구 서비스 (Phase 4).
 
-핵심 검색 도구 (최적화 완료):
-1. InsightForge (심층 인사이트 검색) - 가장 강력한 혼합 검색, 자동으로 하위 질문 생성 및 다차원 검색
-2. PanoramaSearch (광범위 검색) - 만료된 콘텐츠를 포함한 전체 그림 조회
-3. QuickSearch (간단 검색) - 빠른 검색
+`ZepToolsService`와 동일한 public API를 제공하되, 백엔드는 Graphiti(Neo4j)로
+교체. 호출부(report_agent.py, api/report.py) 수정 없이 `services/zep_tools`
+shim 전환만으로 대체 가능.
+
+핵심 검색 도구:
+1. InsightForge (심층 인사이트 검색)
+2. PanoramaSearch (광범위 검색)
+3. QuickSearch (간단 검색)
+4. InterviewAgents (시뮬레이션 Agent 인터뷰)
+
+구현 변경점 (vs zep_tools):
+- `self.client` (Zep) 제거. `self._graphiti` (async) + `self._driver` (sync Cypher) 주입.
+- `client.graph.search(...)` → `_run_async(graphiti.search(query, group_ids=[gid], num_results=N))`
+  · graphiti.search는 edges만 반환 (list[EntityEdge]). nodes scope는 local fallback.
+- `client.graph.node.get(uuid_=...)` → `graphiti_paging.get_node_by_uuid(driver, ...)`.
+- `fetch_all_nodes/edges` 시그니처 변경: (client, graph_id) → (driver, group_id=...).
+  반환 타입도 SDK 객체 → dict. 매핑 유틸 추가.
 """
 
+import asyncio
 import time
 import json
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 
 from ..config import Config
-from ..utils.zep_client import create_zep_client
+from ..utils.graphiti_client import create_graphiti, neo4j_driver
+from ..utils.graphiti_paging import (
+    fetch_all_nodes,
+    fetch_all_edges,
+    get_node_by_uuid,
+)
 from ..utils.logger import get_logger
 from ..utils.llm_client import LLMClient
-from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
 
-logger = get_logger('mirofish.zep_tools')
+logger = get_logger('mirofish.graphiti_tools')
+
+# attributes dict에서 제외할 Neo4j 메타 필드 (graphiti_entity_reader와 동일)
+_META_ATTR_KEYS = {"uuid", "name", "group_id", "labels", "summary", "created_at"}
+
+
+def _run_async(coro):
+    """동기 컨텍스트에서 async coroutine 실행. Flask 라우트(동기) 경계용.
+
+    이미 이벤트 루프가 도는 컨텍스트라면 별도 스레드의 새 루프에서 실행한다.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is not None:
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    return asyncio.run(coro)
+
+
+def _node_dict_to_attrs(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """graphiti_paging node dict의 attributes에서 메타 필드 제거."""
+    attrs = dict(raw.get("attributes") or {})
+    for k in _META_ATTR_KEYS:
+        attrs.pop(k, None)
+    return attrs
 
 
 @dataclass
@@ -245,8 +289,13 @@ class PanoramaResult:
             "historical_count": self.historical_count
         }
     
-    def to_text(self) -> str:
-        """텍스트 형식으로 변환 (완전한 버전, 잘림 없음)"""
+    def to_text(self, max_facts: int = 50, max_nodes: int = 50) -> str:
+        """텍스트 형식으로 변환.
+
+        Fix D: context bloat 억제를 위해 상한 적용.
+        max_facts: active + historical 각각의 최대 출력 건수 (기본 50).
+        max_nodes: 출력할 엔티티 최대 건수 (기본 50).
+        """
         text_parts = [
             f"## 광범위 검색 결과 (미래 전체 조망)",
             f"쿼리: {self.query}",
@@ -256,26 +305,38 @@ class PanoramaResult:
             f"- 현재 유효한 사실: {self.active_count}건",
             f"- 역사/만료된 사실: {self.historical_count}건"
         ]
-        
-        # 현재 유효한 사실 (완전 출력, 잘림 없음)
+
+        # 현재 유효한 사실 (상위 max_facts 건만)
         if self.active_facts:
+            shown = self.active_facts[:max_facts]
+            truncated = len(self.active_facts) > max_facts
             text_parts.append(f"\n### 【현재 유효한 사실】(시뮬레이션 결과 원문)")
-            for i, fact in enumerate(self.active_facts, 1):
+            for i, fact in enumerate(shown, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
-        
-        # 역사/만료된 사실 (완전 출력, 잘림 없음)
+            if truncated:
+                text_parts.append(f"... (총 {len(self.active_facts)}건 중 상위 {max_facts}건 표시, 나머지 생략)")
+
+        # 역사/만료된 사실 (상위 max_facts 건만)
         if self.historical_facts:
+            shown = self.historical_facts[:max_facts]
+            truncated = len(self.historical_facts) > max_facts
             text_parts.append(f"\n### 【역사/만료된 사실】(변화 과정 기록)")
-            for i, fact in enumerate(self.historical_facts, 1):
+            for i, fact in enumerate(shown, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
-        
-        # 핵심 엔티티 (완전 출력, 잘림 없음)
+            if truncated:
+                text_parts.append(f"... (총 {len(self.historical_facts)}건 중 상위 {max_facts}건 표시, 나머지 생략)")
+
+        # 핵심 엔티티 (상위 max_nodes 건만)
         if self.all_nodes:
+            shown_nodes = self.all_nodes[:max_nodes]
+            truncated = len(self.all_nodes) > max_nodes
             text_parts.append(f"\n### 【관련 엔티티】")
-            for node in self.all_nodes:
+            for node in shown_nodes:
                 entity_type = next((l for l in node.labels if l not in ["Entity", "Node"]), "엔티티")
                 text_parts.append(f"- **{node.name}** ({entity_type})")
-        
+            if truncated:
+                text_parts.append(f"... (총 {len(self.all_nodes)}개 중 상위 {max_nodes}개 표시, 나머지 생략)")
+
         return "\n".join(text_parts)
 
 
@@ -370,8 +431,12 @@ class InterviewResult:
             "interviewed_count": self.interviewed_count
         }
     
-    def to_text(self) -> str:
-        """상세한 텍스트 형식으로 변환, LLM 이해 및 보고서 인용용"""
+    def to_text(self, max_interviews: int = 5) -> str:
+        """상세한 텍스트 형식으로 변환, LLM 이해 및 보고서 인용용.
+
+        Fix D: context bloat 억제를 위해 상한 적용.
+        max_interviews: 출력할 인터뷰 최대 건수 (기본 5).
+        """
         text_parts = [
             "## 심층 인터뷰 보고서",
             f"**인터뷰 주제:** {self.interview_topic}",
@@ -383,10 +448,16 @@ class InterviewResult:
         ]
 
         if self.interviews:
-            for i, interview in enumerate(self.interviews, 1):
+            shown = self.interviews[:max_interviews]
+            truncated = len(self.interviews) > max_interviews
+            for i, interview in enumerate(shown, 1):
                 text_parts.append(f"\n#### 인터뷰 #{i}: {interview.agent_name}")
                 text_parts.append(interview.to_text())
                 text_parts.append("\n---")
+            if truncated:
+                text_parts.append(
+                    f"... (총 {len(self.interviews)}건 중 상위 {max_interviews}건 표시, 나머지 생략)"
+                )
         else:
             text_parts.append("（인터뷰 기록 없음）\n\n---")
 
@@ -396,9 +467,9 @@ class InterviewResult:
         return "\n".join(text_parts)
 
 
-class ZepToolsService:
+class GraphitiToolsService:
     """
-    Zep 검색 도구 서비스
+    Graphiti 검색 도구 서비스 (ZepToolsService 호환 API)
     
     【핵심 검색 도구 - 최적화 완료】
     1. insight_forge - 심층 인사이트 검색 (가장 강력, 자동 하위 질문 생성, 다차원 검색)
@@ -419,16 +490,48 @@ class ZepToolsService:
     # 재시도 설정
     MAX_RETRIES = 3
     RETRY_DELAY = 2.0
-    
-    def __init__(self, api_key: Optional[str] = None, llm_client: Optional[LLMClient] = None):
-        self.api_key = api_key or Config.ZEP_API_KEY
-        if not self.api_key:
-            raise ValueError("ZEP_API_KEY가 설정되지 않았습니다")
-        
-        self.client = create_zep_client(api_key=self.api_key)
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        llm_client: Optional[LLMClient] = None,
+        graphiti=None,
+        driver=None,
+    ):
+        # api_key 인자는 하위 호환용(Zep 시절 시그니처 유지). 실제 사용 안 함.
+        _ = api_key
+
+        self._graphiti = graphiti
+        self._owns_graphiti = graphiti is None  # lazy init in _ensure_graphiti
+
+        self._driver = driver if driver is not None else neo4j_driver()
+        self._owns_driver = driver is None
+
         # InsightForge 하위 질문 생성용 LLM 클라이언트
         self._llm_client = llm_client
-        logger.info("ZepToolsService 초기화 완료")
+        logger.info("GraphitiToolsService 초기화 완료")
+
+    def _ensure_graphiti(self):
+        """Graphiti 인스턴스 lazy init. search_graph 첫 호출 시점에 생성."""
+        if self._graphiti is None:
+            self._graphiti = create_graphiti()
+            self._owns_graphiti = True
+        return self._graphiti
+
+    def close(self) -> None:
+        """리소스 정리. 외부 주입된 driver/graphiti는 건드리지 않는다."""
+        if self._owns_graphiti and self._graphiti is not None:
+            try:
+                _run_async(self._graphiti.close())
+            except Exception:  # noqa: BLE001
+                pass
+            self._graphiti = None
+        if self._owns_driver and self._driver is not None:
+            try:
+                self._driver.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self._driver = None
     
     @property
     def llm(self) -> LLMClient:
@@ -483,63 +586,53 @@ class ZepToolsService:
             SearchResult: 검색 결과
         """
         logger.info(f"그래프 검색: graph_id={graph_id}, query={query[:50]}...")
-        
-        # Zep Cloud Search API 사용 시도
+
+        # graphiti.search는 edges만 반환. nodes scope는 local fallback로 처리.
+        if scope == "nodes":
+            return self._local_search(graph_id, query, limit, scope)
+
         try:
-            search_results = self._call_with_retry(
-                func=lambda: self.client.graph.search(
-                    graph_id=graph_id,
-                    query=query,
-                    limit=limit,
-                    scope=scope,
-                    reranker="cross_encoder"
+            graphiti = self._ensure_graphiti()
+            edge_results = self._call_with_retry(
+                func=lambda: _run_async(
+                    graphiti.search(
+                        query=query,
+                        group_ids=[graph_id],
+                        num_results=limit,
+                    )
                 ),
-                operation_name=f"그래프 검색(graph={graph_id})"
+                operation_name=f"그래프 검색(graph={graph_id})",
             )
-            
-            facts = []
-            edges = []
-            nodes = []
-            
-            # 엣지 검색 결과 파싱
-            if hasattr(search_results, 'edges') and search_results.edges:
-                for edge in search_results.edges:
-                    if hasattr(edge, 'fact') and edge.fact:
-                        facts.append(edge.fact)
-                    edges.append({
-                        "uuid": getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', ''),
-                        "name": getattr(edge, 'name', ''),
-                        "fact": getattr(edge, 'fact', ''),
-                        "source_node_uuid": getattr(edge, 'source_node_uuid', ''),
-                        "target_node_uuid": getattr(edge, 'target_node_uuid', ''),
-                    })
-            
-            # 노드 검색 결과 파싱
-            if hasattr(search_results, 'nodes') and search_results.nodes:
-                for node in search_results.nodes:
-                    nodes.append({
-                        "uuid": getattr(node, 'uuid_', None) or getattr(node, 'uuid', ''),
-                        "name": getattr(node, 'name', ''),
-                        "labels": getattr(node, 'labels', []),
-                        "summary": getattr(node, 'summary', ''),
-                    })
-                    # 노드 요약도 사실로 간주
-                    if hasattr(node, 'summary') and node.summary:
-                        facts.append(f"[{node.name}]: {node.summary}")
-            
+
+            facts: List[str] = []
+            edges: List[Dict[str, Any]] = []
+            nodes: List[Dict[str, Any]] = []
+
+            # graphiti.search → list[EntityEdge]
+            for edge in edge_results or []:
+                fact = getattr(edge, 'fact', '') or ''
+                if fact:
+                    facts.append(fact)
+                edges.append({
+                    "uuid": getattr(edge, 'uuid', '') or '',
+                    "name": getattr(edge, 'name', '') or '',
+                    "fact": fact,
+                    "source_node_uuid": getattr(edge, 'source_node_uuid', '') or '',
+                    "target_node_uuid": getattr(edge, 'target_node_uuid', '') or '',
+                })
+
             logger.info(f"검색 완료: 관련 사실 {len(facts)}건 발견")
-            
+
             return SearchResult(
                 facts=facts,
                 edges=edges,
                 nodes=nodes,
                 query=query,
-                total_count=len(facts)
+                total_count=len(facts),
             )
-            
+
         except Exception as e:
-            logger.warning(f"Zep Search API 실패, 로컬 검색으로 대체: {str(e)}")
-            # 대체: 로컬 키워드 매칭 검색 사용
+            logger.warning(f"Graphiti Search API 실패, 로컬 검색으로 대체: {str(e)}")
             return self._local_search(graph_id, query, limit, scope)
     
     def _local_search(
@@ -658,17 +751,16 @@ class ZepToolsService:
         """
         logger.info(f"그래프 {graph_id}의 모든 노드 조회 중...")
 
-        nodes = fetch_all_nodes(self.client, graph_id)
+        raw_nodes = fetch_all_nodes(self._driver, group_id=graph_id)
 
         result = []
-        for node in nodes:
-            node_uuid = getattr(node, 'uuid_', None) or getattr(node, 'uuid', None) or ""
+        for node in raw_nodes:
             result.append(NodeInfo(
-                uuid=str(node_uuid) if node_uuid else "",
-                name=node.name or "",
-                labels=node.labels or [],
-                summary=node.summary or "",
-                attributes=node.attributes or {}
+                uuid=node.get("uuid") or "",
+                name=node.get("name") or "",
+                labels=list(node.get("labels") or []),
+                summary=node.get("summary") or "",
+                attributes=_node_dict_to_attrs(node),
             ))
 
         logger.info(f"노드 {len(result)}개 조회됨")
@@ -687,25 +779,24 @@ class ZepToolsService:
         """
         logger.info(f"그래프 {graph_id}의 모든 엣지 조회 중...")
 
-        edges = fetch_all_edges(self.client, graph_id)
+        raw_edges = fetch_all_edges(self._driver, group_id=graph_id)
 
         result = []
-        for edge in edges:
-            edge_uuid = getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', None) or ""
+        for edge in raw_edges:
             edge_info = EdgeInfo(
-                uuid=str(edge_uuid) if edge_uuid else "",
-                name=edge.name or "",
-                fact=edge.fact or "",
-                source_node_uuid=edge.source_node_uuid or "",
-                target_node_uuid=edge.target_node_uuid or ""
+                uuid=edge.get("uuid") or "",
+                name=edge.get("name") or "",
+                fact=edge.get("fact") or "",
+                source_node_uuid=edge.get("source_node_uuid") or "",
+                target_node_uuid=edge.get("target_node_uuid") or "",
             )
 
-            # 시간 정보 추가
+            # 시간 정보 추가 (graphiti_paging은 invalid_at/expired_at 필드 미반환 → None)
             if include_temporal:
-                edge_info.created_at = getattr(edge, 'created_at', None)
-                edge_info.valid_at = getattr(edge, 'valid_at', None)
-                edge_info.invalid_at = getattr(edge, 'invalid_at', None)
-                edge_info.expired_at = getattr(edge, 'expired_at', None)
+                edge_info.created_at = edge.get("created_at")
+                edge_info.valid_at = edge.get("valid_at")
+                edge_info.invalid_at = edge.get("invalid_at")
+                edge_info.expired_at = edge.get("expired_at")
 
             result.append(edge_info)
 
@@ -723,22 +814,22 @@ class ZepToolsService:
             노드 정보 또는 None
         """
         logger.info(f"노드 상세 정보 조회: {node_uuid[:8]}...")
-        
+
         try:
-            node = self._call_with_retry(
-                func=lambda: self.client.graph.node.get(uuid_=node_uuid),
-                operation_name=f"노드 상세 정보 조회(uuid={node_uuid[:8]}...)"
+            raw = self._call_with_retry(
+                func=lambda: get_node_by_uuid(self._driver, node_uuid=node_uuid),
+                operation_name=f"노드 상세 정보 조회(uuid={node_uuid[:8]}...)",
             )
-            
-            if not node:
+
+            if not raw:
                 return None
-            
+
             return NodeInfo(
-                uuid=getattr(node, 'uuid_', None) or getattr(node, 'uuid', ''),
-                name=node.name or "",
-                labels=node.labels or [],
-                summary=node.summary or "",
-                attributes=node.attributes or {}
+                uuid=raw.get("uuid") or "",
+                name=raw.get("name") or "",
+                labels=list(raw.get("labels") or []),
+                summary=raw.get("summary") or "",
+                attributes=_node_dict_to_attrs(raw),
             )
         except Exception as e:
             logger.error(f"노드 상세 정보 조회 실패: {str(e)}")

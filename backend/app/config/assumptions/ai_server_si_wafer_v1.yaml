@@ -1,0 +1,139 @@
+# MiroFish Assumptions Pack — AI Server / SI Wafer v1
+#
+# simulation_adapter는 extra_config.assumptions_text에 담긴 텍스트를
+# `simulation_requirement`에 `## Assumptions (vX)` 블록으로 임베드한다.
+# 이 YAML의 `narrative` 필드가 바로 그 텍스트. agent_hints는 향후 구조화된
+# 주입 슬롯 생겼을 때 쓰도록 예비.
+#
+# 관측 시점: 2026-04-19. 데이터 근거는 seed_documents/ai_server_si_wafer/*.md.
+
+version: ai_server_si_wafer_v1
+scenario: "AI 서버 / SI 웨이퍼 생태계 여론 전파 시뮬레이션"
+reference_period: "2026-04 관측 (2025Q4~2026Q1 실적 + 2026 가이던스 기준)"
+
+narrative: |
+  ## 매크로 배경 (관측 시점: 2026-04)
+
+  **하이퍼스케일러 capex 사이클**
+  - Microsoft/Amazon/Google/Meta 2026 합산 capex 약 **$690B**, 전년비 큰 폭 증가.
+  - Microsoft FY26 Q2 capex $37.5B (YoY +66%, 연환산 ~$100B). Nadella "nearly 1GW added this quarter".
+  - Amazon 2026 $200B (+50% YoY), Trainium2 1.4M chips sold out.
+  - Alphabet 2026 $175-185B (사실상 2배). Cloud 백로그 $240B (QoQ +55%).
+  - Meta 2026 $115-135B, 6.6GW 전력 확보, Nebius와 5년 $27B 외주 계약.
+
+  **NVIDIA / 가속기**
+  - Q4 FY26 Data Center 매출 $62.3B (YoY +75%), Q1 FY27 가이던스 $78B.
+  - 로드맵: H200 → B200/GB200 → GB300 → Vera Rubin (2H26) → Feynman.
+  - GTC 2026 (2026-03-16, San Jose): Blackwell+Rubin 2025-27 누적 매출 "$1T+".
+  - H200 중국 수출 25% 수수료로 승인.
+  - HBM 구조적 병목: 2028-29까지 수급 미스매치, wafer 소모 DDR5 대비 300%.
+
+  **TSMC / 파운드리 / CoWoS**
+  - Q1 2026 매출 US$35.9B (+35% YoY), 순이익 $18.2B (+58%) 사상 최대.
+  - HPC 비중 61% (5nm 36%, 3nm 25%). 2026 capex $52-56B 상단.
+  - CoWoS 증설: 2024말 35K wpm → 2026말 130K wpm (4배) → 2027 150K wpm.
+  - NVIDIA가 CoWoS 60% 선점, CoWoS-L로 Rubin 4x reticle 대응.
+  - 공급 병목 3중: CoWoS + HBM + N2 동시 tight. ABF용 유리섬유 크런치 추가 리스크.
+
+  **대만 서버 ODM (Big 4)**
+  - Quanta March 매출 NT$362.8B (YoY +88%).
+  - Wistron 1월 NT$228.3B (YoY +151%, AI 70%).
+  - Wiwynn 2025 연매출 NT$950B (YoY +164%).
+  - Inventec March NT$87.5B (YoY +42%).
+
+  **메모리 / HBM**
+  - SK Hynix HBM4 2026-02 양산, NVIDIA Rubin ~70% 점유 전망 (UBS).
+  - 2026 1Q 영업이익 컨센서스 36-40조 원. 하나증권 2026 연간 영업이익 231.7조,
+    목표주가 160만원.
+  - Samsung HBM4 2026-02-23 세계 최초 양산, Rubin 최종 검증 통과.
+    HBM3e 12H는 2025-09 NVIDIA 퀄 완료.
+  - Micron은 HBM 후발주자 캐치업 중.
+  - 1Q26 서버 DRAM 가격 QoQ +90~95% 급등 (TrendForce).
+  - AI가 2026 글로벌 DRAM capacity 20% 소비 (HBM이 wafer 4x 소비).
+
+  **한국 PCB/CCL 수혜주**
+  - 이수페타시스 2026 매출 +40%, 영업이익 +55% 전망. Google TPU v7향 공급 2배,
+    Anthropic 100만 TPU 계약 수혜. 5공장 2026H2-2028 단계 증설.
+    NH 목표주가 17만원.
+  - 두산전자BG 2026 매출 2.28조 (+23.4% YoY), 영업이익 7,058억 (+27.6%).
+    메리츠 목표가 135만원 (2026 최선호), 하나 167만원, 한경 155만원.
+
+  **SI 웨이퍼 4사**
+  - Shin-Etsu, SUMCO: 일본 300mm 지배. SUMCO FY2026 capex 500-600억엔 감축
+    (증설 완료 후). AI향 수요 견조.
+  - GlobalWafers: Siltronic 인수 진행, 미국 Sherman 공장 ramp-up.
+  - SK Siltron: 유일한 한국 300mm 제조사, 메모리/파운드리 고객.
+
+  **CCL / Cooling 전환점**
+  - EMC M8+ CCL CAGR +130% (Goldman), ITEQ M9 인증 통과.
+  - AI 트레이닝 서버 DLC(Direct Liquid Cooling) 침투율 15%(2024) → 74%(2026).
+    AVC Chairman "2026은 액냉 원년".
+
+  **미국 데이터센터 인프라**
+  - 2025-11 YTD DC 건설지출 $53.7B (YoY +138.6%). Texas $7.1B, Virginia $6.4B.
+  - ERCOT 2026 전력수요 +14%, PJM +3.2%. Virginia DC가 주 전력 25%+ 소비.
+  - 원전 PPA: MS-Constellation 835MW (TMI), AWS-Talen 1.9GW (Susquehanna),
+    Meta-Constellation 1.1GW (Clinton), Google-Kairos 500MW SMR.
+  - Virginia SCC GS-5 신규 요금제 승인 (2027-01 시행).
+  - Stargate Abilene: GB200 450K개 15년 리스.
+
+  ## 리스크 / 불확실성 (여론 분기 포인트)
+
+  - **지정학**: 대만 해협 긴장 (CoWoS/HBM 집중도 95%+), 미중 수출통제 확대.
+  - **버블 논쟁**: Michael Burry AI 버블 숏 vs 구조적 성장 견해 대립.
+  - **전력 제약**: Virginia/ERCOT 그리드, 원전 PPA 충분성, 규제 요금제.
+  - **메모리 경쟁**: SK Hynix HBM4 선점 vs Samsung 역전 시도.
+  - **공급 병목**: CoWoS/HBM/N2 3중 tight → 2026 하반기 AI 서버 출하 지연 가능.
+
+  ## 등장 엔티티 유형 (소셜 에이전트 풀)
+
+  - HyperScaler: Microsoft, Amazon, Google, Meta, Oracle
+  - FablessCompany: NVIDIA, AMD, Broadcom, Marvell
+  - Foundry: TSMC, Samsung Foundry, Intel Foundry
+  - ServerODM: Wistron, Wiwynn, Quanta, Inventec, Foxconn
+  - MemoryMaker: SK Hynix, Samsung Electronics, Micron
+  - WaferManufacturer: Shin-Etsu, SUMCO, GlobalWafers, SK Siltron
+  - Analyst: JPMorgan(Gokul Hariharan), Goldman, Citi, 미래에셋(김동원), KB, NH
+  - MediaOutlet: DIGITIMES, TrendForce, Reuters, Bloomberg, 전자신문, 한경
+
+  ## 시뮬레이션 포커스
+
+  각 에이전트는 자신의 이해관계와 2026-04 시점 공개 정보를 바탕으로 Twitter/Reddit
+  에서 발언한다. 애널리스트는 분기 실적·공급 병목·HBM 경쟁을 추적, 미디어는 사실
+  보도 + 경쟁 관점 비교, 기업은 자사 포지션 방어 + 경쟁사 견제, 개인은 투자 포트폴리오
+  및 기술 관심 관점에서 참여한다.
+
+  ## 측정 지표
+
+  - 엔티티별 언급 빈도 추이 (round별)
+  - 감정 분포 (긍정/부정/중립) 변화
+  - 정보 전파 체인 평균 길이 (repost/comment 경로)
+  - 핵심 논쟁 주제 클러스터 (HBM 경쟁, CoWoS 병목, capex 버블, 지정학)
+
+# Agent profile 생성 시 참고 (simulation_config_generator에 외부 슬롯 없음 —
+# 현재는 narrative 내에 포함. 차후 구조화 주입 경로 생기면 사용)
+agent_hints:
+  distribution:
+    HyperScaler: 0.10
+    FablessCompany: 0.06
+    Foundry: 0.04
+    ServerODM: 0.08
+    MemoryMaker: 0.06
+    WaferManufacturer: 0.06
+    Analyst: 0.25
+    MediaOutlet: 0.20
+    Person: 0.10
+    Organization: 0.05
+
+  stance_notes:
+    - "Analyst: 수치 중심, 반기/분기 가이던스 추적. 찬/반 양측 다수 배치."
+    - "MediaOutlet: DIGITIMES/TrendForce는 대만 관점, 전자신문/한경은 한국 관점, Reuters/Bloomberg는 글로벌."
+    - "HyperScaler: 상호 경쟁 + 공급업체 압박, capex 방어."
+    - "MemoryMaker: HBM 퀄/점유율 공방, 가격 인상 정당화."
+    - "Person: 투자 관점(강세/약세) 분산 배치, Burry형 경계론 일부 포함."
+
+# 시뮬 실행 정책 기본값 (extra_config에서 override 가능)
+runtime_defaults:
+  simulation_hours: 72
+  minutes_per_round: 60
+  suggested_max_rounds: 20  # 빠른 리허설. 풀 run은 null(=72)

@@ -21,8 +21,9 @@ from queue import Queue
 
 from ..config import Config
 from ..utils.logger import get_logger
-from .zep_graph_memory_updater import ZepGraphMemoryManager
-from .simulation_ipc import SimulationIPCClient, CommandType, IPCResponse
+from .graphiti_graph_memory_updater import GraphitiGraphMemoryManager
+from .simulation_ipc import CommandType, IPCResponse
+from .simulation_ipc_factory import make_ipc_client
 
 logger = get_logger('mirofish.simulation_runner')
 
@@ -440,7 +441,7 @@ class SimulationRunner:
                 raise ValueError("그래프 메모리 업데이트 활성화 시 graph_id를 제공해야 합니다")
             
             try:
-                ZepGraphMemoryManager.create_updater(simulation_id, graph_id)
+                GraphitiGraphMemoryManager.create_updater(simulation_id, graph_id)
                 cls._graph_memory_enabled[simulation_id] = True
                 logger.info(f"그래프 메모리 업데이트 활성화됨: simulation_id={simulation_id}, graph_id={graph_id}")
             except Exception as e:
@@ -648,7 +649,7 @@ class SimulationRunner:
             # 그래프 메모리 업데이터 중지
             if cls._graph_memory_enabled.get(simulation_id, False):
                 try:
-                    ZepGraphMemoryManager.stop_updater(simulation_id)
+                    GraphitiGraphMemoryManager.stop_updater(simulation_id)
                     logger.info(f"그래프 메모리 업데이트 중지됨: simulation_id={simulation_id}")
                 except Exception as e:
                     logger.error(f"그래프 메모리 업데이터 중지 실패: {e}")
@@ -696,7 +697,7 @@ class SimulationRunner:
         graph_memory_enabled = cls._graph_memory_enabled.get(state.simulation_id, False)
         graph_updater = None
         if graph_memory_enabled:
-            graph_updater = ZepGraphMemoryManager.get_updater(state.simulation_id)
+            graph_updater = GraphitiGraphMemoryManager.get_updater(state.simulation_id)
         
         try:
             with open(log_path, 'r', encoding='utf-8') as f:
@@ -922,7 +923,7 @@ class SimulationRunner:
         # 그래프 메모리 업데이터 중지
         if cls._graph_memory_enabled.get(simulation_id, False):
             try:
-                ZepGraphMemoryManager.stop_updater(simulation_id)
+                GraphitiGraphMemoryManager.stop_updater(simulation_id)
                 logger.info(f"그래프 메모리 업데이트 중지됨: simulation_id={simulation_id}")
             except Exception as e:
                 logger.error(f"그래프 메모리 업데이터 중지 실패: {e}")
@@ -1316,7 +1317,7 @@ class SimulationRunner:
         
         # 먼저 모든 그래프 메모리 업데이터 중지（stop_all 내부에서 로그 출력）
         try:
-            ZepGraphMemoryManager.stop_all()
+            GraphitiGraphMemoryManager.stop_all()
         except Exception as e:
             logger.error(f"그래프 메모리 업데이터 중지 실패: {e}")
         cls._graph_memory_enabled.clear()
@@ -1496,13 +1497,13 @@ class SimulationRunner:
         if not os.path.exists(sim_dir):
             return False
 
-        ipc_client = SimulationIPCClient(sim_dir)
+        ipc_client = make_ipc_client(sim_dir)
         return ipc_client.check_env_alive()
 
     @classmethod
     def get_env_status_detail(cls, simulation_id: str) -> Dict[str, Any]:
         """
-        시뮬레이션 환경의 상세 상태 정보 조회
+        시뮬레이션 환경의 상세 상태 정보 조회 — IPC 백엔드 (파일/Redis) 위임.
 
         Args:
             simulation_id: 시뮬레이션 ID
@@ -1511,29 +1512,27 @@ class SimulationRunner:
             상태 상세 딕셔너리, status, twitter_available, reddit_available, timestamp 포함
         """
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
-        status_file = os.path.join(sim_dir, "env_status.json")
-        
         default_status = {
             "status": "stopped",
             "twitter_available": False,
             "reddit_available": False,
-            "timestamp": None
+            "timestamp": None,
         }
-        
-        if not os.path.exists(status_file):
+        if not os.path.exists(sim_dir):
             return default_status
-        
+
+        ipc_client = make_ipc_client(sim_dir)
         try:
-            with open(status_file, 'r', encoding='utf-8') as f:
-                status = json.load(f)
-            return {
-                "status": status.get("status", "stopped"),
-                "twitter_available": status.get("twitter_available", False),
-                "reddit_available": status.get("reddit_available", False),
-                "timestamp": status.get("timestamp")
-            }
-        except (json.JSONDecodeError, OSError):
+            status = ipc_client.get_env_status()
+        except Exception:
             return default_status
+
+        return {
+            "status": status.get("status", "stopped"),
+            "twitter_available": bool(status.get("twitter_available", False)),
+            "reddit_available": bool(status.get("reddit_available", False)),
+            "timestamp": status.get("timestamp"),
+        }
 
     @classmethod
     def interview_agent(
@@ -1568,7 +1567,7 @@ class SimulationRunner:
         if not os.path.exists(sim_dir):
             raise ValueError(f"시뮬레이션이 존재하지 않습니다: {simulation_id}")
 
-        ipc_client = SimulationIPCClient(sim_dir)
+        ipc_client = make_ipc_client(sim_dir)
 
         if not ipc_client.check_env_alive():
             raise ValueError(f"시뮬레이션 환경이 실행 중이 아니거나 종료됨, Interview 실행 불가: {simulation_id}")
@@ -1630,7 +1629,7 @@ class SimulationRunner:
         if not os.path.exists(sim_dir):
             raise ValueError(f"시뮬레이션이 존재하지 않습니다: {simulation_id}")
 
-        ipc_client = SimulationIPCClient(sim_dir)
+        ipc_client = make_ipc_client(sim_dir)
 
         if not ipc_client.check_env_alive():
             raise ValueError(f"시뮬레이션 환경이 실행 중이 아니거나 종료됨, Interview 실행 불가: {simulation_id}")
@@ -1740,7 +1739,7 @@ class SimulationRunner:
         if not os.path.exists(sim_dir):
             raise ValueError(f"시뮬레이션이 존재하지 않습니다: {simulation_id}")
         
-        ipc_client = SimulationIPCClient(sim_dir)
+        ipc_client = make_ipc_client(sim_dir)
         
         if not ipc_client.check_env_alive():
             return {

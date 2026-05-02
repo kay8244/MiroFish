@@ -15,7 +15,7 @@
             :class="{ active: viewMode === mode }"
             @click="viewMode = mode"
           >
-            {{ { graph: 'Graph', split: 'Split', workbench: 'Workbench' }[mode] }}
+            {{ { graph: '그래프', split: '분할', workbench: '워크벤치' }[mode] }}
           </button>
         </div>
       </div>
@@ -91,7 +91,7 @@ const viewMode = ref('split') // graph | split | workbench
 
 // Step State
 const currentStep = ref(1) // 1: Graph Build, 2: Env Setup, 3: Run Simulation, 4: Report, 5: Deep Interaction
-const stepNames = ['Graph Build', 'Env Setup', 'Run Simulation', 'Report', 'Deep Interaction']
+const stepNames = ['그래프 구축', '환경 설정', '시뮬레이션 실행', '리포트', '심층 상호작용']
 
 // Data State
 const currentProjectId = ref(route.params.projectId)
@@ -409,20 +409,23 @@ onUnmounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #FFF;
+  background: var(--color-canvas);
   overflow: hidden;
-  font-family: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: var(--font-text);
+  color: var(--color-text);
 }
 
-/* Header */
+/* Header — Apple sticky translucent */
 .app-header {
-  height: 60px;
-  border-bottom: 1px solid #EAEAEA;
+  height: 64px;
+  border-bottom: 1px solid var(--color-border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
-  background: #FFF;
+  padding: 0 var(--space-8);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
   z-index: 100;
   position: relative;
 }
@@ -434,88 +437,101 @@ onUnmounted(() => {
 }
 
 .brand {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: 1px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
   cursor: pointer;
+  color: var(--color-text);
 }
 
+/* Apple-style segmented control */
 .view-switcher {
   display: flex;
-  background: #F5F5F5;
-  padding: 4px;
-  border-radius: 6px;
-  gap: 4px;
+  background: var(--color-canvas-muted);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  gap: 2px;
+  border: 1px solid var(--color-border-subtle);
 }
 
 .switch-btn {
   border: none;
   background: transparent;
-  padding: 6px 16px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #666;
-  border-radius: 4px;
+  padding: 6px 14px;
+  font-size: var(--fs-micro);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.2s;
+  letter-spacing: -0.012em;
+  transition: background var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+}
+
+.switch-btn:hover:not(.active) {
+  color: var(--color-text);
 }
 
 .switch-btn.active {
-  background: #FFF;
-  color: #000;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-1);
+  font-weight: 600;
 }
 
 .status-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  color: #666;
+  font-size: var(--fs-micro);
+  color: var(--color-text-muted);
   font-weight: 500;
+  letter-spacing: -0.012em;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-6);
 }
 
 .workflow-step {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: var(--fs-control);
 }
 
 .step-num {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 700;
-  color: #999;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: -0.01em;
 }
 
 .step-name {
-  font-weight: 700;
-  color: #000;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.014em;
 }
 
 .step-divider {
   width: 1px;
   height: 14px;
-  background-color: #E0E0E0;
+  background-color: var(--color-border-subtle);
 }
 
 .dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  background: #CCC;
+  border-radius: var(--radius-circle);
+  background: var(--color-border-subtle);
 }
 
-.status-indicator.processing .dot { background: #FF5722; animation: pulse 1s infinite; }
-.status-indicator.completed .dot { background: #4CAF50; }
-.status-indicator.error .dot { background: #F44336; }
+.status-indicator.processing .dot { background: var(--color-accent); animation: pulse 1s infinite; }
+.status-indicator.completed .dot { background: var(--color-success); }
+.status-indicator.error .dot { background: var(--color-error); }
 
 @keyframes pulse { 50% { opacity: 0.5; } }
 
@@ -535,6 +551,6 @@ onUnmounted(() => {
 }
 
 .panel-wrapper.left {
-  border-right: 1px solid #EAEAEA;
+  border-right: 1px solid var(--color-border-subtle);
 }
 </style>

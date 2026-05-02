@@ -3,21 +3,21 @@
     <!-- Header Section -->
     <div class="insight-header">
       <div class="header-main">
-        <div class="header-title">Deep Insight</div>
+        <div class="header-title">심층 인사이트</div>
         <div class="header-stats">
           <span class="stat-item">
             <span class="stat-value">{{ result.stats.facts || result.facts.length }}</span>
-            <span class="stat-label">Facts</span>
+            <span class="stat-label">사실</span>
           </span>
           <span class="stat-divider">/</span>
           <span class="stat-item">
             <span class="stat-value">{{ result.stats.entities || result.entities.length }}</span>
-            <span class="stat-label">Entities</span>
+            <span class="stat-label">엔티티</span>
           </span>
           <span class="stat-divider">/</span>
           <span class="stat-item">
             <span class="stat-value">{{ result.stats.relationships || result.relations.length }}</span>
-            <span class="stat-label">Relations</span>
+            <span class="stat-label">관계</span>
           </span>
           <template v-if="resultLength">
             <span class="stat-divider">&middot;</span>
@@ -53,7 +53,7 @@
       <!-- Facts Tab -->
       <div v-if="activeTab === 'facts' && result.facts.length > 0" class="facts-panel">
         <div class="panel-header">
-          <span class="panel-title">Latest Key Facts Associated in Temporal Memory</span>
+          <span class="panel-title">시간 메모리의 최신 핵심 사실</span>
           <span class="panel-count">Total: {{ result.facts.length }}</span>
         </div>
         <div class="facts-list">
@@ -70,7 +70,7 @@
       <!-- Entities Tab -->
       <div v-if="activeTab === 'entities' && result.entities.length > 0" class="entities-panel">
         <div class="panel-header">
-          <span class="panel-title">Core Entities</span>
+          <span class="panel-title">핵심 엔티티</span>
           <span class="panel-count">Total: {{ result.entities.length }}</span>
         </div>
         <div class="entities-grid">
@@ -88,7 +88,7 @@
       <!-- Relations Tab -->
       <div v-if="activeTab === 'relations' && result.relations.length > 0" class="relations-panel">
         <div class="panel-header">
-          <span class="panel-title">Relationship Chains</span>
+          <span class="panel-title">관계 체인</span>
           <span class="panel-count">Total: {{ result.relations.length }}</span>
         </div>
         <div class="relations-list">
@@ -122,9 +122,9 @@
       </div>
 
       <!-- Empty states -->
-      <div v-if="activeTab === 'facts' && result.facts.length === 0" class="empty-state">No key memories available</div>
-      <div v-if="activeTab === 'entities' && result.entities.length === 0" class="empty-state">No core entities available</div>
-      <div v-if="activeTab === 'relations' && result.relations.length === 0" class="empty-state">No relationship chains available</div>
+      <div v-if="activeTab === 'facts' && result.facts.length === 0" class="empty-state">핵심 메모리가 없습니다</div>
+      <div v-if="activeTab === 'entities' && result.entities.length === 0" class="empty-state">핵심 엔티티가 없습니다</div>
+      <div v-if="activeTab === 'relations' && result.relations.length === 0" class="empty-state">관계 체인이 없습니다</div>
     </div>
   </div>
 </template>
